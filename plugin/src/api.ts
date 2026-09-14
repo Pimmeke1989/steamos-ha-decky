@@ -18,22 +18,22 @@ export interface PluginStatus {
   connected: number;
   pairing_code: string | null;
   game: GameInfo | null;
-  perf: { fps: number | null; frametime_ms: number | null } | null;
+  perf: { fps: number | null; frametime_ms: number | null; focus: string | null } | null;
   hostname: string;
+  ip: string | null;
   machine_id: string;
-  mangohud: {
+  fps: {
     enabled: boolean;
     active: boolean;
     last_error: string | null;
-    config_path: string | null;
-    csv_path: string | null;
-    log_dir: string;
+    pipe: string | null;
+    focus: string | null;
   };
 }
 
 export interface PluginSettings {
   port: number;
-  mangohud: { enabled: boolean; log_dir: string; config_path: string; log_interval_ms: number };
+  fps: { enabled: boolean; stats_pipe: string };
 }
 
 export interface NotifyPayload {

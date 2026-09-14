@@ -2,8 +2,8 @@
 
 Only active when the config entry has a SteamGridDB API key. Follows the game
 title from the main coordinator; on a change it searches SteamGridDB, picks the
-best grid / hero / logo / icon and caches the URLs for 30 days so a game costs
-at most five requests, ever.
+best cover (grid) and icon and caches the URLs for 30 days so a game costs at
+most three requests, ever.
 """
 
 from __future__ import annotations
@@ -28,11 +28,9 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 SGDB_BASE_URL = "https://www.steamgriddb.com/api/v2"
-ASSET_TYPES = ("grid", "hero", "logo", "icon")
+ASSET_TYPES = ("grid", "icon")  # cover + icon; heroes/logos deliberately left out
 ASSET_QUERY: dict[str, dict[str, str]] = {
     "grid": {"dimensions": "600x900", "types": "static", "nsfw": "false"},
-    "hero": {"dimensions": "1920x620", "types": "static", "nsfw": "false"},
-    "logo": {"types": "static", "nsfw": "false"},
     "icon": {"types": "static", "nsfw": "false"},
 }
 CACHE_TTL_S = 30 * 24 * 3600

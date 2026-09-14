@@ -43,7 +43,8 @@ TXT:      id=<first 12 chars of /etc/machine-id>
   "status": "gaming",                     // "gaming" | "disconnected"
   "game": { "title": "Hades II", "appid": 1145350, "shortcut": false,
             "started_at": "2026-09-14T20:41:07+02:00" },   // or null
-  "perf": { "fps": 118.4, "frametime_ms": 8.45 },          // or null
+  "perf": { "fps": 59.9, "frametime_ms": 16.69, "focus": "-708029406" },   // or null;
+                                                          // focus = focused appid (signed 32-bit) or "steam"
   "sys":  { "cpu_temp": 61.2, "gpu_temp": 67.0, "gpu_mem_temp": 70.0, "ssd_temp": 41.0,
             "cpu_load": 37.5, "cpu_ghz": 3.9, "mem_pct": 54.1,
             "gpu_load": 92.0, "vram_pct": 71.0, "gpu_watt": 98.5,

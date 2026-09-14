@@ -12,9 +12,9 @@ Two parts, one repo:
 No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
 
 > **Status: 0.1.0, feature-complete for the first release** — discovery, pairing, status,
-> running game, system statistics, FPS via MangoHud, on-screen notifications, optional
-> artwork via SteamGridDB and a plugin update check. Not yet tested on a real Steam
-> Machine; `docs/design.md` lists what to verify first.
+> running game, system statistics, FPS via gamescope, on-screen notifications, optional
+> artwork via SteamGridDB and a plugin update check. Tested end-to-end on a Steam Deck;
+> `docs/design.md` lists what is still open for the Steam Machine itself.
 
 ## How it works
 
@@ -30,7 +30,7 @@ Steam Machine (Gaming Mode)                     Home Assistant
 │ Decky backend (Python)       │                └─────────────────────────┘
 │  · aiohttp HTTP + WebSocket  │
 │  · mDNS _steamos-ha._tcp     │
-│  · hwmon / proc / MangoHud   │
+│  · hwmon / proc / gamescope  │
 └──────────────────────────────┘
 ```
 
@@ -83,9 +83,9 @@ entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 | `sensor.<name>_gpu_power` | W |
 | `sensor.<name>_fan_speed` | rpm |
 | `sensor.<name>_last_boot`* | timestamp (diagnostic) |
-| `sensor.<name>_fps`, `_frametime`* | averaged over the last second of MangoHud's log; only while a game runs |
+| `sensor.<name>_fps`, `_frametime`* | from gamescope's stats pipe, averaged over the last second; only while a game runs |
 | `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
-| `image.<name>_cover`, `_hero_banner`, `_logo`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
+| `image.<name>_cover`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
 | `sensor.<name>_artwork_match` | which SteamGridDB game was matched (diagnostic); attributes `sgdb_id`, `overridden`, `error` |
 | `update.<name>_plugin` | compares the running plugin version with the latest GitHub release (diagnostic; install is manual) |
 
@@ -132,29 +132,22 @@ looks it up again.
 
 With a SteamGridDB API key the integration looks the running game up **by title** — not by
 appid, because non-Steam shortcuts get random ids — and exposes the best-scored cover
-(600×900), hero banner (1920×620), logo and icon as `image` entities. Results are cached
-for 30 days, so a game costs at most five API calls. When no game runs the last artwork
+(600×900) and icon as `image` entities. Results are cached for 30 days, so a game costs
+at most three API calls. When no game runs the last artwork
 stays put and `sensor.<name>_artwork_match` shows `none`, so a dashboard can decide for
 itself whether to keep showing the cover. Titles that match the wrong game can be pinned
 under *Configure* with one `Game title = SteamGridDB game id` per line.
 
-## FPS via MangoHud
+## FPS via gamescope
 
-Gaming Mode already runs MangoHud's `mangoapp` for the performance overlay. When a game
-starts, the plugin
-
-1. finds the config file `mangoapp` uses (`MANGOHUD_CONFIGFILE` of the running process,
-   else `~/.config/MangoHud/MangoHud.conf`), and makes sure it contains
-   `output_folder=<log dir>` and `log_interval=250`;
-2. asks `mangoapp` to reload its config and start a log session (a control message on
-   MangoHud's own message queue — send-only, so the overlay keeps every frame);
-3. tails the newest CSV in the log dir once a second and averages `fps` / `frametime`.
-
-When the game stops the session is stopped and the CSV deleted. Log dir default:
-`~/.local/share/steamos-ha/mangohud`. If anything in this chain fails, the FPS line in the
-plugin panel shows what went wrong and the sensors stay unavailable; the other sensors are
-not affected. `enabled`, `log_dir`, `config_path` and `log_interval_ms` live under
-`mangohud` in `~/homebrew/settings/SteamOS HA/settings.json`.
+gamescope (the Gaming Mode compositor) is started with `-T …/stats.pipe` and writes
+`fps=59.988003` a few times per second plus `focus=<appid>` / `focus=steam` into that FIFO.
+Nothing on SteamOS reads it anymore, so the plugin opens it while a game runs and averages
+the samples over the last second. No config files are touched and MangoHud is not involved
+(its log reports mangoapp's own redraw rate, not the game's — verified on a Steam Deck).
+The pipe is found from the running gamescope's command line; `fps.stats_pipe` in
+`~/homebrew/settings/SteamOS HA/settings.json` overrides it. If the pipe cannot be found
+the FPS line in the plugin panel says so and the sensors stay unavailable.
 
 ## Development
 
@@ -187,7 +180,8 @@ Local plugin testing needs the vendored deps once: `bash scripts/vendor-plugin-d
 (installs zeroconf + ifaddr into `plugin/py_modules`, git-ignored; CI does the same for the zip).
 
 `scripts/steamos-inventory.sh` prints everything the plugin relies on (hwmon names,
-Decky user, steamos-manager D-Bus, MangoHud paths) — useful when something doesn't show up.
+Decky user, steamos-manager D-Bus, gamescope/MangoHud processes) and `scripts/fps-probe.py`
+checks the possible FPS sources — useful when something doesn't show up.
 
 The API between plugin and integration is documented in [`docs/api.md`](docs/api.md); the
 overall design in [`docs/design.md`](docs/design.md).

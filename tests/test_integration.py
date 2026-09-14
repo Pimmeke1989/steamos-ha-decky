@@ -212,13 +212,13 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     # artwork: looked up by title, best-scored asset wins, icon missing → unavailable
     await _wait_for(hass, "sensor.steammachine_artwork_match", "Hades II")
     match = hass.states.get("sensor.steammachine_artwork_match")
-    assert match.attributes["sgdb_id"] == 5138 and match.attributes["assets"] == ["grid", "hero", "logo"]
+    assert match.attributes["sgdb_id"] == 5138 and match.attributes["assets"] == ["grid"]
     grid = hass.states.get("image.steammachine_cover")
     assert grid.state not in ("unknown", "unavailable")
     assert hass.states.get("image.steammachine_icon").state == "unavailable"
     assert entry.runtime_data.artwork.data.urls["grid"] == "https://cdn.example/grids-best.png"
     lookups = [r for r in sgdb.requests if r != "search:portal"]  # "portal" = API-key validation
-    assert lookups == ["search:Hades II", "grids:5138", "heroes:5138", "logos:5138", "icons:5138"]
+    assert lookups == ["search:Hades II", "grids:5138", "icons:5138"]
 
     # update entity: plugin 0.1.0 installed, release v0.2.0 on GitHub → update available
     upd = hass.states.get("update.steammachine_plugin")

@@ -18,7 +18,7 @@ import decky  # provided by Decky Loader
 
 from steamos_ha import HEARTBEAT_TIMEOUT_S, PLUGIN_VERSION
 from steamos_ha.discovery import Discovery, read_machine_id, read_model
-from steamos_ha.mangohud import MangoHudSession
+from steamos_ha.gamescope import GamescopeStats
 from steamos_ha.server import Server
 from steamos_ha.settings import Settings
 from steamos_ha.state import STATUS_DISCONNECTED, STATUS_GAMING, State
@@ -43,7 +43,7 @@ class Plugin:
         self.server_error: str | None = None
         self.stats = SysStats()
         self._last_sys_sent: dict[str, Any] | None = None
-        self.mangohud = self._make_mangohud()
+        self.gamescope = self._make_gamescope()
 
         self.server = Server(
             self.settings,
@@ -76,7 +76,7 @@ class Plugin:
             task = getattr(self, task_name, None)
             if task:
                 task.cancel()
-        await self.mangohud.stop()
+        await self.gamescope.stop()
         await self.discovery.stop()
         await self.server.stop()
 
@@ -109,11 +109,9 @@ class Plugin:
             await self.server.broadcast(_event("game_started", after, update["ts"]))
         await self.server.broadcast(update)
         if after is None:
-            await self.mangohud.stop()
-        elif before is None or after.get("appid") != before.get("appid"):
-            if self.settings.mangohud.get("enabled", True):
-                await self.mangohud.stop()
-                await self.mangohud.start()
+            await self.gamescope.stop()
+        elif before is None and self.settings.fps.get("enabled", True):
+            await self.gamescope.start()
 
     async def get_status(self) -> dict[str, Any]:
         """Everything the QAM panel shows."""
@@ -130,31 +128,31 @@ class Plugin:
             "game": self.state.game,
             "perf": self.state.perf,
             "hostname": self.hostname,
+            "ip": _local_ip(),
             "machine_id": self.machine_id,
-            "mangohud": {
-                "enabled": bool(self.settings.mangohud.get("enabled", True)),
-                "active": self.mangohud.active,
-                "last_error": self.mangohud.last_error,
-                "config_path": self.mangohud.config_path,
-                "csv_path": self.mangohud.csv_path,
-                "log_dir": self.mangohud.log_dir,
+            "fps": {
+                "enabled": bool(self.settings.fps.get("enabled", True)),
+                "active": self.gamescope.active,
+                "last_error": self.gamescope.last_error,
+                "pipe": self.gamescope.pipe_path,
+                "focus": self.gamescope.focus,
             },
         }
 
     async def get_settings(self) -> dict[str, Any]:
-        return {"port": self.settings.port, "mangohud": dict(self.settings.mangohud)}
+        return {"port": self.settings.port, "fps": dict(self.settings.fps)}
 
     async def set_settings(self, changes: dict[str, Any]) -> dict[str, Any]:
         old_port = self.settings.port
-        old_mangohud = dict(self.settings.mangohud)
+        old_fps = dict(self.settings.fps)
         self.settings.update(changes or {})
         if self.settings.port != old_port:
             await self._restart_server()
-        if self.settings.mangohud != old_mangohud:
-            await self.mangohud.stop()
-            self.mangohud = self._make_mangohud()
-            if self.state.game and self.settings.mangohud.get("enabled", True):
-                await self.mangohud.start()
+        if self.settings.fps != old_fps:
+            await self.gamescope.stop()
+            self.gamescope = self._make_gamescope()
+            if self.state.game and self.settings.fps.get("enabled", True):
+                await self.gamescope.start()
         return await self.get_settings()
 
     async def unpair_all(self) -> dict[str, Any]:
@@ -178,18 +176,11 @@ class Plugin:
         return True
 
     # ---------------------------------------------------------------- internals
-    def _make_mangohud(self) -> MangoHudSession:
-        mh = self.settings.mangohud
-        log_dir = mh.get("log_dir") or os.path.join(decky.DECKY_USER_HOME, ".local", "share", "steamos-ha", "mangohud")
-        return MangoHudSession(
-            os.path.expanduser(log_dir),
-            config_override=mh.get("config_path") or "",
-            interval_ms=int(mh.get("log_interval_ms") or 250),
-            on_perf=self._on_perf,
-        )
+    def _make_gamescope(self) -> GamescopeStats:
+        return GamescopeStats(self._on_perf, pipe_override=self.settings.fps.get("stats_pipe") or "")
 
-    async def _on_perf(self, fps: float | None, frametime_ms: float | None) -> None:
-        await self.server.broadcast(self.state.set_perf(fps, frametime_ms))
+    async def _on_perf(self, fps: float | None, frametime_ms: float | None, focus: str | None) -> None:
+        await self.server.broadcast(self.state.set_perf(fps, frametime_ms, focus))
 
     async def _heartbeat_watchdog(self) -> None:
         while True:
@@ -199,7 +190,7 @@ class Plugin:
                     log.info("No heartbeat for %.0fs → status disconnected", HEARTBEAT_TIMEOUT_S)
                     await self.server.broadcast(self.state.set_status(STATUS_DISCONNECTED))
                     await self._show_pairing_code(None)
-                    await self.mangohud.stop()
+                    await self.gamescope.stop()
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001
@@ -237,6 +228,16 @@ class Plugin:
             return
         self.discovery = Discovery(self.settings.port, self.machine_id, self.hostname, self.model)
         await self.discovery.start()
+
+
+def _local_ip() -> str | None:
+    """The address Home Assistant would reach us on (UDP connect sends no packet)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("10.255.255.255", 1))
+            return sock.getsockname()[0]
+    except OSError:
+        return None
 
 
 def _event(name: str, game: dict[str, Any], ts: str) -> dict[str, Any]:

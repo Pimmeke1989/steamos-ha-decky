@@ -251,10 +251,13 @@ class SteamOSGameSensor(SteamOSEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         game = self.coordinator.data.game or {}
+        perf = self.coordinator.data.perf or {}
+        focus = perf.get("focus")
         return {
             "appid": game.get("appid"),
             "shortcut": game.get("shortcut"),
             "started_at": game.get("started_at"),
+            "steam_ui_focused": None if focus is None else focus == "steam",
         }
 
 

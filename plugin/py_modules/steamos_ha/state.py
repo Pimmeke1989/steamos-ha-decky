@@ -82,7 +82,9 @@ class State:
             }
         return self.diff(before)
 
-    def set_perf(self, fps: float | None, frametime_ms: float | None) -> dict[str, Any] | None:
+    def set_perf(
+        self, fps: float | None, frametime_ms: float | None, focus: str | None = None
+    ) -> dict[str, Any] | None:
         before = self._sections()
         if fps is None and frametime_ms is None:
             self.perf = None
@@ -90,6 +92,7 @@ class State:
             self.perf = {
                 "fps": None if fps is None else round(float(fps), 1),
                 "frametime_ms": None if frametime_ms is None else round(float(frametime_ms), 2),
+                "focus": focus,
             }
         return self.diff(before)
 

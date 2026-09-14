@@ -7,7 +7,7 @@ Stored shape::
       "clients": [
         {"token_sha256": "...", "name": "Home Assistant (woonkamer)", "created": "2026-09-14T20:00:00+02:00"}
       ],
-      "mangohud": {"enabled": true, "log_dir": "", "config_path": "", "log_interval_ms": 250}
+      "fps": {"enabled": true, "stats_pipe": ""}
     }
 """
 
@@ -26,7 +26,7 @@ from . import DEFAULT_PORT
 _DEFAULTS: dict[str, Any] = {
     "port": DEFAULT_PORT,
     "clients": [],
-    "mangohud": {"enabled": True, "log_dir": "", "config_path": "", "log_interval_ms": 250},
+    "fps": {"enabled": True, "stats_pipe": ""},
 }
 
 
@@ -57,8 +57,9 @@ class Settings:
         if isinstance(loaded, dict):
             merged = json.loads(json.dumps(_DEFAULTS))
             merged.update(loaded)
-            if isinstance(loaded.get("mangohud"), dict):
-                merged["mangohud"] = {**_DEFAULTS["mangohud"], **loaded["mangohud"]}
+            if isinstance(loaded.get("fps"), dict):
+                merged["fps"] = {**_DEFAULTS["fps"], **loaded["fps"]}
+            merged.pop("mangohud", None)  # pre-0.1.0 setting, no longer used
             self.data = merged
 
     def save(self) -> None:
@@ -132,12 +133,12 @@ class Settings:
         self.save()
 
     @property
-    def mangohud(self) -> dict[str, Any]:
-        mh = self.data.get("mangohud")
-        if not isinstance(mh, dict):
-            mh = dict(_DEFAULTS["mangohud"])
-            self.data["mangohud"] = mh
-        return mh
+    def fps(self) -> dict[str, Any]:
+        cfg = self.data.get("fps")
+        if not isinstance(cfg, dict):
+            cfg = dict(_DEFAULTS["fps"])
+            self.data["fps"] = cfg
+        return cfg
 
     def update(self, changes: dict[str, Any]) -> None:
         """Apply a partial update coming from the plugin UI (never touches clients)."""
@@ -145,8 +146,6 @@ class Settings:
             port = int(changes["port"])
             if 1024 <= port <= 65535:
                 self.data["port"] = port
-        if isinstance(changes.get("mangohud"), dict):
-            self.mangohud.update(
-                {k: v for k, v in changes["mangohud"].items() if k in _DEFAULTS["mangohud"]}
-            )
+        if isinstance(changes.get("fps"), dict):
+            self.fps.update({k: v for k, v in changes["fps"].items() if k in _DEFAULTS["fps"]})
         self.save()

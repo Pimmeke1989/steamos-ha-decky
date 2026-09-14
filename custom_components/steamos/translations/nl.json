@@ -135,12 +135,6 @@
       "artwork_grid": {
         "name": "Cover"
       },
-      "artwork_hero": {
-        "name": "Hero-banner"
-      },
-      "artwork_logo": {
-        "name": "Logo"
-      },
       "artwork_icon": {
         "name": "Icoon"
       }

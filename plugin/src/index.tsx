@@ -114,31 +114,31 @@ const Content: FC = () => {
     return (
       <PanelSection title="Home Assistant">
         <PanelSectionRow>
-          <Field label="Status">Laden…</Field>
+          <Field label="Status">Loading…</Field>
         </PanelSectionRow>
       </PanelSection>
     );
   }
 
   const connection = status.server_error
-    ? `Fout: ${status.server_error}`
+    ? `Error: ${status.server_error}`
     : status.paired
       ? status.connected > 0
-        ? "Verbonden"
-        : "Gekoppeld, wacht op Home Assistant"
-      : "Nog niet gekoppeld";
+        ? "Connected"
+        : "Paired, waiting for Home Assistant"
+      : "Not paired yet";
 
   return (
     <>
       <PanelSection title="Home Assistant">
         <PanelSectionRow>
-          <Field label="Verbinding" focusable>
+          <Field label="Connection" focusable>
             {connection}
           </Field>
         </PanelSectionRow>
         {status.pairing_code && (
           <PanelSectionRow>
-            <Field label="Koppelcode" description="Vul deze code in Home Assistant in" focusable>
+            <Field label="Pairing code" description="Enter this code in Home Assistant" focusable>
               <span style={{ fontSize: "1.6em", fontWeight: 700, letterSpacing: "0.08em" }}>
                 {status.pairing_code}
               </span>
@@ -148,14 +148,14 @@ const Content: FC = () => {
         {status.pairing_code && (
           <PanelSectionRow>
             <ButtonItem layout="below" onClick={() => cancelPairing()}>
-              Koppelen annuleren
+              Cancel pairing
             </ButtonItem>
           </PanelSectionRow>
         )}
         {status.paired && (
           <PanelSectionRow>
             <ButtonItem layout="below" onClick={() => unpairAll().then(setStatus)}>
-              Koppeling verwijderen
+              Remove pairing
             </ButtonItem>
           </PanelSectionRow>
         )}
@@ -171,13 +171,13 @@ const Content: FC = () => {
           <Field
             label="FPS"
             description={
-              status.mangohud.last_error
-                ? `MangoHud: ${status.mangohud.last_error}`
-                : status.mangohud.active
-                  ? "via MangoHud-log"
-                  : status.mangohud.enabled
-                    ? "start bij volgende game"
-                    : "uitgeschakeld"
+              status.fps.last_error
+                ? `gamescope: ${status.fps.last_error}`
+                : status.fps.active
+                  ? `via gamescope${status.fps.focus === "steam" ? " (Steam UI in front)" : ""}`
+                  : status.fps.enabled
+                    ? "starts with the next game"
+                    : "disabled"
             }
             focusable
           >
@@ -185,13 +185,13 @@ const Content: FC = () => {
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
-          <Field label="Adres" focusable>
-            {status.hostname}:{status.port}
+          <Field label="Address" description={status.hostname} focusable>
+            {status.ip ?? status.hostname}:{status.port}
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
           <Field label="mDNS" focusable>
-            {status.discovery === "none" ? "niet beschikbaar (handmatig toevoegen)" : status.discovery}
+            {status.discovery === "none" ? "unavailable (add manually)" : status.discovery}
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
@@ -247,8 +247,8 @@ export default definePlugin(() => {
   const onPairingCode = (code: string | null) => {
     if (code) {
       toaster.toast({
-        title: "Home Assistant koppelen",
-        body: `Koppelcode: ${code}`,
+        title: "Pair with Home Assistant",
+        body: `Pairing code: ${code}`,
         duration: 15000,
         icon: <FaHome />,
       });
