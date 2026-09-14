@@ -43,11 +43,77 @@
           "gaming": "Gaming Mode",
           "disconnected": "Niet verbonden"
         }
+      },
+      "game": {
+        "name": "Game",
+        "state": {
+          "none": "Geen game"
+        }
+      },
+      "fps": {
+        "name": "FPS"
+      },
+      "frametime": {
+        "name": "Frametijd"
+      },
+      "cpu_temperature": {
+        "name": "CPU-temperatuur"
+      },
+      "gpu_temperature": {
+        "name": "GPU-temperatuur"
+      },
+      "gpu_memory_temperature": {
+        "name": "GPU-geheugentemperatuur"
+      },
+      "ssd_temperature": {
+        "name": "SSD-temperatuur"
+      },
+      "cpu_usage": {
+        "name": "CPU-gebruik"
+      },
+      "cpu_frequency": {
+        "name": "CPU-frequentie"
+      },
+      "memory_usage": {
+        "name": "Geheugengebruik"
+      },
+      "gpu_usage": {
+        "name": "GPU-gebruik"
+      },
+      "vram_usage": {
+        "name": "VRAM-gebruik"
+      },
+      "gpu_power": {
+        "name": "GPU-vermogen"
+      },
+      "fan_speed": {
+        "name": "Ventilatorsnelheid"
+      },
+      "last_boot": {
+        "name": "Laatste opstart"
       }
     },
     "notify": {
       "toast": {
         "name": "Melding op scherm"
+      }
+    },
+    "binary_sensor": {
+      "game_running": {
+        "name": "Game actief"
+      }
+    },
+    "event": {
+      "game": {
+        "name": "Game",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "game_started": "Game gestart",
+              "game_stopped": "Game gestopt"
+            }
+          }
+        }
       }
     }
   },

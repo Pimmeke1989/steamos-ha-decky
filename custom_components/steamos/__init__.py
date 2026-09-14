@@ -14,7 +14,7 @@ from .coordinator import SteamOSConfigEntry, SteamOSCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NOTIFY]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.EVENT, Platform.NOTIFY, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SteamOSConfigEntry) -> bool:

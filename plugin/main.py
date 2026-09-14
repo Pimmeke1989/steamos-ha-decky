@@ -21,6 +21,9 @@ from steamos_ha.discovery import Discovery, read_machine_id, read_model
 from steamos_ha.server import Server
 from steamos_ha.settings import Settings
 from steamos_ha.state import STATUS_DISCONNECTED, STATUS_GAMING, State
+from steamos_ha.sysstats import SysStats, apply_thresholds
+
+SAMPLE_INTERVAL_S = 2.0
 
 log = decky.logger
 
@@ -37,6 +40,8 @@ class Plugin:
         self.last_heartbeat: float = 0.0
         self.pairing_code: str | None = None
         self.server_error: str | None = None
+        self.stats = SysStats()
+        self._last_sys_sent: dict[str, Any] | None = None
 
         self.server = Server(
             self.settings,
@@ -58,15 +63,17 @@ class Plugin:
             await self.discovery.start()
 
         self._watchdog = self.loop.create_task(self._heartbeat_watchdog())
+        self._sampler = self.loop.create_task(self._sample_loop())
         log.info(
             "SteamOS HA %s ready (id=%s, host=%s, model=%s)", PLUGIN_VERSION, self.machine_id, self.hostname, self.model
         )
 
     async def _unload(self) -> None:
         log.info("Unloading")
-        watchdog = getattr(self, "_watchdog", None)
-        if watchdog:
-            watchdog.cancel()
+        for task_name in ("_watchdog", "_sampler"):
+            task = getattr(self, task_name, None)
+            if task:
+                task.cancel()
         await self.discovery.stop()
         await self.server.stop()
 
@@ -83,6 +90,7 @@ class Plugin:
         if self.state.status != STATUS_GAMING:
             await self.server.broadcast(self.state.set_status(STATUS_GAMING))
             log.info("Frontend alive → status gaming")
+            await self._sample_once()
         return await self.get_status()
 
     async def set_running_app(self, appid: int | None = None, name: str | None = None, shortcut: bool = False) -> None:
@@ -158,6 +166,26 @@ class Plugin:
                 raise
             except Exception as err:  # noqa: BLE001
                 log.exception("watchdog: %s", err)
+
+    async def _sample_loop(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(SAMPLE_INTERVAL_S)
+                if self.state.status == STATUS_GAMING:
+                    await self._sample_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001
+                log.exception("sampler: %s", err)
+
+    async def _sample_once(self) -> None:
+        """Read system stats (in a thread: sysfs reads can block) and push changes."""
+        values = await self.loop.run_in_executor(None, self.stats.sample)
+        values = apply_thresholds(self._last_sys_sent, values)
+        update = self.state.set_sys(values)
+        if update:
+            self._last_sys_sent = values
+            await self.server.broadcast(update)
 
     async def _restart_server(self) -> None:
         await self.discovery.stop()

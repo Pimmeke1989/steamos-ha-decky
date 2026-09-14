@@ -11,9 +11,9 @@ Two parts, one repo:
 
 No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
 
-> **Status: milestone 1 (skeleton + connection).** Working today: discovery, pairing, the
-> `gaming` / `disconnected` status sensor, and on-screen notifications. Stats, running game
-> and FPS sensors follow in the next milestones — see `docs/design.md`.
+> **Status: milestone 2.** Working today: discovery, pairing, status, running game, system
+> statistics (temperatures, load, power, fan) and on-screen notifications. FPS via MangoHud
+> (milestone 3) and artwork (milestone 5) follow — see `docs/design.md`.
 
 ## How it works
 
@@ -62,12 +62,31 @@ Manual: copy `custom_components/steamos` into your `config/custom_components/` a
 
 That's it. Re-pairing later: remove the integration entry, or press *Koppeling verwijderen* in the plugin.
 
-## Entities (milestone 1)
+## Entities
+
+All entities hang off one device. Everything except the status sensor and the notify
+entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 
 | Entity | Description |
 |---|---|
 | `sensor.<name>_status` | `gaming` or `disconnected`; always available |
-| `notify.<name>` | `notify.send_message` shows a toast on screen (only in Gaming Mode) |
+| `sensor.<name>_game` | Title of the running game, or `none`; attributes `appid`, `shortcut`, `started_at` |
+| `binary_sensor.<name>_game_running` | On while a game runs |
+| `event.<name>_game` | `game_started` / `game_stopped` with `title`, `appid`, `shortcut` |
+| `sensor.<name>_cpu_temperature`, `_gpu_temperature`, `_gpu_memory_temperature`*, `_ssd_temperature`* | °C from hwmon (`k10temp`, `amdgpu`, `nvme`) |
+| `sensor.<name>_cpu_usage`, `_memory_usage`, `_gpu_usage`, `_vram_usage` | % |
+| `sensor.<name>_cpu_frequency`* | GHz, average of all cores |
+| `sensor.<name>_gpu_power` | W |
+| `sensor.<name>_fan_speed` | rpm |
+| `sensor.<name>_last_boot`* | timestamp (diagnostic) |
+| `sensor.<name>_fps`, `_frametime`* | from MangoHud — milestone 3, unavailable until then |
+| `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
+
+\* disabled by default; enable in the entity settings.
+
+A metric the machine does not expose (no matching hwmon node) simply stays unavailable.
+The plugin samples every 2 s and only sends values that moved by more than a small
+threshold (0.5 °C, 1 %, 0.5 W, 50 rpm), so the recorder stays quiet.
 
 Example automation:
 
@@ -83,7 +102,7 @@ conditions:
     state: gaming
 actions:
   - action: notify.send_message
-    target: { entity_id: notify.steam_machine }
+    target: { entity_id: notify.steam_machine_on_screen_notification }
     data: { title: Washing machine, message: The laundry is done }
 ```
 

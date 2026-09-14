@@ -43,11 +43,77 @@
           "gaming": "Gaming Mode",
           "disconnected": "Disconnected"
         }
+      },
+      "game": {
+        "name": "Game",
+        "state": {
+          "none": "No game"
+        }
+      },
+      "fps": {
+        "name": "FPS"
+      },
+      "frametime": {
+        "name": "Frame time"
+      },
+      "cpu_temperature": {
+        "name": "CPU temperature"
+      },
+      "gpu_temperature": {
+        "name": "GPU temperature"
+      },
+      "gpu_memory_temperature": {
+        "name": "GPU memory temperature"
+      },
+      "ssd_temperature": {
+        "name": "SSD temperature"
+      },
+      "cpu_usage": {
+        "name": "CPU usage"
+      },
+      "cpu_frequency": {
+        "name": "CPU frequency"
+      },
+      "memory_usage": {
+        "name": "Memory usage"
+      },
+      "gpu_usage": {
+        "name": "GPU usage"
+      },
+      "vram_usage": {
+        "name": "VRAM usage"
+      },
+      "gpu_power": {
+        "name": "GPU power"
+      },
+      "fan_speed": {
+        "name": "Fan speed"
+      },
+      "last_boot": {
+        "name": "Last boot"
       }
     },
     "notify": {
       "toast": {
         "name": "On-screen notification"
+      }
+    },
+    "binary_sensor": {
+      "game_running": {
+        "name": "Game running"
+      }
+    },
+    "event": {
+      "game": {
+        "name": "Game",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "game_started": "Game started",
+              "game_stopped": "Game stopped"
+            }
+          }
+        }
       }
     }
   },

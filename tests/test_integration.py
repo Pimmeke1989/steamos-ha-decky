@@ -111,9 +111,43 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     )
     assert plugin.toasts[-1]["message"] == "Hoi"
 
-    # plugin reports desktop mode → sensor flips, notify raises
+    # game starts → game sensor, binary sensor, event entity
+    assert hass.states.get("sensor.steammachine_game").state == "none"
+    assert hass.states.get("binary_sensor.steammachine_game_running").state == "off"
+    update = plugin.state.set_game(1145350, "Hades II", False)
+    await plugin.server.broadcast(
+        {"type": "event", "event": "game_started", "game": {"title": "Hades II", "appid": 1145350, "shortcut": False}}
+    )
+    await plugin.server.broadcast(update)
+    await _wait_for(hass, "sensor.steammachine_game", "Hades II")
+    game = hass.states.get("sensor.steammachine_game")
+    assert game.attributes["appid"] == 1145350 and game.attributes["shortcut"] is False
+    assert hass.states.get("binary_sensor.steammachine_game_running").state == "on"
+    ev = hass.states.get("event.steammachine_game")
+    assert ev.attributes["event_type"] == "game_started" and ev.attributes["title"] == "Hades II"
+
+    # system stats → value sensors; missing metric stays unavailable
+    await plugin.server.broadcast(
+        plugin.state.set_sys(
+            {"cpu_temp": 61.2, "gpu_temp": 67.0, "cpu_load": 37, "mem_pct": 54, "gpu_load": 92,
+             "gpu_watt": 98.5, "fan_rpm": None, "boot_time": "2026-09-14T18:02:11+02:00"}
+        )
+    )
+    await _wait_for(hass, "sensor.steammachine_cpu_temperature", "61.2")
+    assert hass.states.get("sensor.steammachine_gpu_temperature").state == "67.0"
+    assert hass.states.get("sensor.steammachine_gpu_power").state == "98.5"
+    assert hass.states.get("sensor.steammachine_cpu_usage").state == "37"
+    assert hass.states.get("sensor.steammachine_fan_speed").state == "unavailable"
+    assert hass.states.get("sensor.steammachine_fps").state == "unavailable"  # no perf yet
+
+    await plugin.server.broadcast(plugin.state.set_perf(118.4, 8.45))
+    await _wait_for(hass, "sensor.steammachine_fps", "118.4")
+
+    # plugin reports desktop mode → sensor flips, notify raises, stats unavailable
     await plugin.server.broadcast(plugin.state.set_status(STATUS_DISCONNECTED))
     await _wait_for(hass, "sensor.steammachine_status", STATUS_DISCONNECTED)
+    assert hass.states.get("sensor.steammachine_cpu_temperature").state == "unavailable"
+    assert hass.states.get("sensor.steammachine_game").state == "unavailable"
     with pytest.raises(Exception, match="Gaming Mode"):
         await hass.services.async_call(
             "notify",

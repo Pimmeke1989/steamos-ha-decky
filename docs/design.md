@@ -23,7 +23,7 @@ lives as a shared page; this file keeps the decisions that shape the code.
 |---|---|---|---|
 | M0 | Inventory | Run `scripts/steamos-inventory.sh` on the Steam Machine; confirm hwmon names, Decky user, MangoHud paths. | open |
 | M1 | Skeleton + connection | Server, pairing, WebSocket, heartbeat, QAM panel, discovery, config flow, status sensor, notify entity. | **done** |
-| M2 | System stats + game | hwmon/proc sampler, temperature/load/power sensors, game sensor, binary_sensor, event entity. | |
+| M2 | System stats + game | hwmon/proc sampler, temperature/load/power sensors, game sensor, binary_sensor, event entity. | **done** |
 | M3 | FPS | MangoHud log session on/off, tailer, FPS + frametime sensors. | |
 | M4 | Notifications polish | `steamos.notify` action with duration/icon, 409 behaviour, tests. | |
 | M5 | Artwork module | SteamGridDB client, optional API key in config/options flow, cache, image entities, overrides. | |
