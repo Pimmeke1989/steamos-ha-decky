@@ -1,0 +1,22 @@
+# Node / Decky frontend
+plugin/node_modules/
+plugin/dist/
+plugin/.pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build output
+release/
+*.zip
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

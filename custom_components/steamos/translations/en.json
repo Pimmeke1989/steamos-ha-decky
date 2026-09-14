@@ -1,0 +1,62 @@
+{
+  "config": {
+    "flow_title": "{name} ({model})",
+    "step": {
+      "user": {
+        "title": "Add a Steam Machine",
+        "description": "Enter the address of the Steam Machine running the SteamOS HA Decky plugin.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Steam Machine found",
+        "description": "Connect to {name} ({model}) at {host}? Make sure it is in Gaming Mode: the pairing code will be shown on screen."
+      },
+      "pair": {
+        "title": "Pair with {name}",
+        "description": "A 6-digit pairing code is now shown on the TV (and in the SteamOS HA panel of the Quick Access Menu). Enter it here.",
+        "data": {
+          "code": "Pairing code"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the Steam Machine. Check the address and that the Decky plugin is running.",
+      "not_in_gaming_mode": "The Steam Machine is not in Gaming Mode. Switch to Gaming Mode and try again.",
+      "wrong_code": "That code is not correct. Check the screen and try again.",
+      "pair_expired": "The pairing code expired. A new code is shown on screen.",
+      "pair_failed": "Pairing failed. Check the Decky plugin log."
+    },
+    "abort": {
+      "already_configured": "This Steam Machine is already configured.",
+      "no_id": "Discovered device did not advertise an id.",
+      "unsupported_api": "The Decky plugin speaks a newer API than this integration. Update the integration."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "gaming": "Gaming Mode",
+          "disconnected": "Disconnected"
+        }
+      }
+    },
+    "notify": {
+      "toast": {
+        "name": "On-screen notification"
+      }
+    }
+  },
+  "exceptions": {
+    "not_in_gaming_mode": {
+      "message": "The Steam Machine is not in Gaming Mode, so the notification cannot be shown."
+    },
+    "notify_failed": {
+      "message": "The notification could not be sent: {error}"
+    }
+  }
+}

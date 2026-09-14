@@ -1,0 +1,62 @@
+{
+  "config": {
+    "flow_title": "{name} ({model})",
+    "step": {
+      "user": {
+        "title": "Steam Machine toevoegen",
+        "description": "Vul het adres in van de Steam Machine waarop de SteamOS HA Decky-plugin draait.",
+        "data": {
+          "host": "Host",
+          "port": "Poort"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Steam Machine gevonden",
+        "description": "Verbinden met {name} ({model}) op {host}? Zorg dat de Steam Machine in Gaming Mode staat: de koppelcode verschijnt op het scherm."
+      },
+      "pair": {
+        "title": "Koppelen met {name}",
+        "description": "Op de tv (en in het SteamOS HA-paneel van het Quick Access-menu) staat nu een 6-cijferige koppelcode. Vul die hier in.",
+        "data": {
+          "code": "Koppelcode"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "De Steam Machine is niet bereikbaar. Controleer het adres en of de Decky-plugin draait.",
+      "not_in_gaming_mode": "De Steam Machine staat niet in Gaming Mode. Schakel over naar Gaming Mode en probeer opnieuw.",
+      "wrong_code": "Die code klopt niet. Kijk op het scherm en probeer opnieuw.",
+      "pair_expired": "De koppelcode is verlopen. Er staat een nieuwe code op het scherm.",
+      "pair_failed": "Koppelen is mislukt. Bekijk het log van de Decky-plugin."
+    },
+    "abort": {
+      "already_configured": "Deze Steam Machine is al toegevoegd.",
+      "no_id": "Het gevonden apparaat adverteert geen id.",
+      "unsupported_api": "De Decky-plugin gebruikt een nieuwere API dan deze integratie. Werk de integratie bij."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "gaming": "Gaming Mode",
+          "disconnected": "Niet verbonden"
+        }
+      }
+    },
+    "notify": {
+      "toast": {
+        "name": "Melding op scherm"
+      }
+    }
+  },
+  "exceptions": {
+    "not_in_gaming_mode": {
+      "message": "De Steam Machine staat niet in Gaming Mode, dus de melding kan niet worden getoond."
+    },
+    "notify_failed": {
+      "message": "De melding kon niet worden verstuurd: {error}"
+    }
+  }
+}

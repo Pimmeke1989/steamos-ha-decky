@@ -1,0 +1,11 @@
+{
+  "name": "SteamOS HA",
+  "author": "Pimmeke1989",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["home-assistant", "automation", "monitoring"],
+    "description": "Connects your Steam Machine to Home Assistant: status, running game, FPS, temperatures and notifications on screen.",
+    "image": "https://raw.githubusercontent.com/Pimmeke1989/steamos-ha-decky/main/docs/plugin-image.png"
+  }
+}
