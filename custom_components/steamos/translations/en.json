@@ -23,7 +23,7 @@
       },
       "artwork": {
         "title": "Game artwork (optional)",
-        "description": "With a SteamGridDB API key the integration adds image entities with the cover, hero banner, logo and icon of the running game, looked up by title. Leave empty to skip; you can add a key later under Configure. Get a key at https://www.steamgriddb.com/profile/preferences/api",
+        "description": "With a SteamGridDB API key the integration adds image entities with the cover, hero banner, logo and icon of the running game, looked up by title. Leave empty to skip; you can add a key later under Configure. Get a key at {sgdb_url}",
         "data": {
           "api_key": "SteamGridDB API key"
         }

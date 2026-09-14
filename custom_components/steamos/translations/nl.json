@@ -23,7 +23,7 @@
       },
       "artwork": {
         "title": "Game-artwork (optioneel)",
-        "description": "Met een SteamGridDB-API-key voegt de integratie image-entiteiten toe met de cover, hero-banner, het logo en het icoon van de draaiende game, opgezocht op titel. Leeg laten om over te slaan; je kunt later alsnog een key toevoegen onder Configureren. Een key haal je op https://www.steamgriddb.com/profile/preferences/api",
+        "description": "Met een SteamGridDB-API-key voegt de integratie image-entiteiten toe met de cover, hero-banner, het logo en het icoon van de draaiende game, opgezocht op titel. Leeg laten om over te slaan; je kunt later alsnog een key toevoegen onder Configureren. Een key haal je op {sgdb_url}",
         "data": {
           "api_key": "SteamGridDB-API-key"
         }

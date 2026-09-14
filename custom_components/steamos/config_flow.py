@@ -49,6 +49,7 @@ STEP_USER_SCHEMA = vol.Schema(
     }
 )
 STEP_PAIR_SCHEMA = vol.Schema({vol.Required("code"): str})
+SGDB_API_KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
 STEP_ARTWORK_SCHEMA = vol.Schema(
     {vol.Optional(CONF_API_KEY, default=""): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
 )
@@ -209,7 +210,12 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
                     },
                     options={CONF_API_KEY: api_key} if api_key else {},
                 )
-        return self.async_show_form(step_id="artwork", data_schema=STEP_ARTWORK_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="artwork",
+            data_schema=STEP_ARTWORK_SCHEMA,
+            errors=errors,
+            description_placeholders={"sgdb_url": SGDB_API_KEY_URL},
+        )
 
 
 class SteamOSOptionsFlow(OptionsFlow):
