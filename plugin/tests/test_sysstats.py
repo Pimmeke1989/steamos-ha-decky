@@ -58,6 +58,9 @@ def test_sample_reads_everything(tmp_path):
     assert s["mem_pct"] == 54  # (16000000-7344000)/16000000
     assert s["cpu_load"] is None  # needs two samples
     assert s["boot_time"] and "T" in s["boot_time"]
+    # a desktop-class machine has no battery at all
+    assert stats.has_battery() is False
+    assert s["battery_pct"] is None and s["battery_charging"] is None
 
     # second /proc/stat sample → load = busy delta / total delta
     _w(procr, "stat", "cpu  1500 0 700 8300 100 0 0 0 0 0\n")
@@ -101,6 +104,29 @@ def test_steam_deck_like_tree(tmp_path):
     assert s["gpu_watt"] == 3.0
     assert s["fan_rpm"] == 1527
     assert s["vram_pct"] == 35  # from mem_info_vram_* fallback
+
+
+def test_battery_is_found_and_controllers_are_ignored(tmp_path):
+    """A handheld reports its own battery; a connected controller must not be mistaken for it."""
+    sysr = str(tmp_path / "sys")
+    # alphabetically first, but scope=Device → someone's gamepad
+    _w(sysr, "class/power_supply/AAA_controller/type", "Battery\n")
+    _w(sysr, "class/power_supply/AAA_controller/scope", "Device\n")
+    _w(sysr, "class/power_supply/AAA_controller/capacity", "12\n")
+    _w(sysr, "class/power_supply/ACAD/type", "Mains\n")
+    _w(sysr, "class/power_supply/ACAD/online", "1\n")
+    _w(sysr, "class/power_supply/BAT1/type", "Battery\n")
+    _w(sysr, "class/power_supply/BAT1/capacity", "83\n")
+    _w(sysr, "class/power_supply/BAT1/status", "Charging\n")
+    stats = SysStats(sysr, str(tmp_path / "proc"))
+    assert stats.has_battery() is True
+    s = stats.sample()
+    assert s["battery_pct"] == 83
+    assert s["battery_charging"] is True  # stays a bool, never rounded to 1.0
+
+    # "Full" on the charger is not charging
+    _w(sysr, "class/power_supply/BAT1/status", "Full\n")
+    assert stats.battery_charging() is False
 
 
 def test_apply_thresholds():

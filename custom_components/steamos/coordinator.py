@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .artwork import ArtworkCoordinator
 from .client import SteamOSClient
-from .const import CONF_MAC, DOMAIN, STATUS_DISCONNECTED, STATUS_GAMING
+from .const import CONF_HAS_BATTERY, CONF_MAC, DOMAIN, STATUS_DISCONNECTED, STATUS_GAMING
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ class SteamOSData:
 
     status: str = STATUS_DISCONNECTED
     game: dict[str, Any] | None = None
-    perf: dict[str, Any] | None = None
     sys: dict[str, Any] = field(default_factory=dict)
     plugin_version: str | None = None
     mac: str | None = None
+    os_version: str | None = None
     connected: bool = False
 
     @property
@@ -82,17 +82,25 @@ class SteamOSCoordinator(DataUpdateCoordinator[SteamOSData]):
         if mtype == "hello":
             data.plugin_version = msg.get("plugin")
             data.mac = msg.get("mac") or None
+            data.os_version = msg.get("os_version") or None
             data.connected = True
+            # Keep the entry in step with the machine: the MAC decides whether Wake-on-LAN
+            # can work, the battery flag whether the battery entities exist at all (a
+            # change there needs a reload, which HA does for us on an entry update).
+            fixed = {}
             if data.mac and self.config_entry.data.get(CONF_MAC) != data.mac:
+                fixed[CONF_MAC] = data.mac
+            if "battery" in msg and self.config_entry.data.get(CONF_HAS_BATTERY) != bool(msg["battery"]):
+                fixed[CONF_HAS_BATTERY] = bool(msg["battery"])
+            if fixed:
                 self.hass.config_entries.async_update_entry(
-                    self.config_entry, data={**self.config_entry.data, CONF_MAC: data.mac}
+                    self.config_entry, data={**self.config_entry.data, **fixed}
                 )
             return
         if mtype == "state":
             data.connected = True
             data.status = msg.get("status", STATUS_DISCONNECTED)
             data.game = msg.get("game")
-            data.perf = msg.get("perf")
             data.sys = msg.get("sys") or {}
             self.async_set_updated_data(data)
             return
@@ -101,8 +109,6 @@ class SteamOSCoordinator(DataUpdateCoordinator[SteamOSData]):
                 data.status = msg["status"] or STATUS_DISCONNECTED
             if "game" in msg:
                 data.game = msg["game"]
-            if "perf" in msg:
-                data.perf = msg["perf"]
             if "sys" in msg:
                 data.sys = msg["sys"] or {}
             self.async_set_updated_data(data)
@@ -121,7 +127,6 @@ class SteamOSCoordinator(DataUpdateCoordinator[SteamOSData]):
             data.connected = False
             data.status = STATUS_DISCONNECTED
             data.game = None
-            data.perf = None
             self.async_set_updated_data(data)
 
     @callback

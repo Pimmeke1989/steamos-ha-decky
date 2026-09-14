@@ -18,23 +18,25 @@ export interface PluginStatus {
   connected: number;
   pairing_code: string | null;
   game: GameInfo | null;
-  perf: { fps: number | null; frametime_ms: number | null; focus: string | null } | null;
   hostname: string;
   ip: string | null;
   mac: string | null;
+  os_version: string | null;
+  battery: boolean;
+  last_power: PowerResult | null;
   machine_id: string;
-  fps: {
-    enabled: boolean;
-    active: boolean;
-    last_error: string | null;
-    pipe: string | null;
-    focus: string | null;
-  };
+}
+
+/** What became of the last Sleep / Shut down / Restart request. */
+export interface PowerResult {
+  action: string;
+  ok: boolean | null; // null = handed to the Steam UI, no answer yet
+  detail: string;
+  at: string;
 }
 
 export interface PluginSettings {
   port: number;
-  fps: { enabled: boolean; stats_pipe: string };
 }
 
 export interface NotifyPayload {
@@ -54,3 +56,4 @@ export const getSettings = callable<[], PluginSettings>("get_settings");
 export const setSettings = callable<[changes: Partial<PluginSettings>], PluginSettings>("set_settings");
 export const unpairAll = callable<[], PluginStatus>("unpair_all");
 export const cancelPairing = callable<[], void>("cancel_pairing");
+export const powerResult = callable<[action: string, ok: boolean, detail: string], void>("power_result");

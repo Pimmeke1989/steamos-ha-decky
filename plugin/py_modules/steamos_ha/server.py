@@ -69,6 +69,8 @@ class Server:
         machine_id: str,
         hostname: str,
         model: str,
+        os_version: str | None = None,
+        battery: bool = False,
         show_code: ShowCodeCb,
         notify: NotifyCb,
         power: PowerCb,
@@ -79,6 +81,8 @@ class Server:
         self.machine_id = machine_id
         self.hostname = hostname
         self.model = model
+        self.os_version = os_version
+        self.battery = battery
         self._show_code = show_code
         self._notify = notify
         self._power = power
@@ -156,6 +160,8 @@ class Server:
                 "id": self.machine_id,
                 "name": self.hostname,
                 "model": self.model,
+                "os_version": self.os_version,
+                "battery": self.battery,
                 "plugin": PLUGIN_VERSION,
                 "api": API_VERSION,
                 "paired": self.settings.paired,
@@ -248,6 +254,8 @@ class Server:
                     "id": self.machine_id,
                     "name": self.hostname,
                     "model": self.model,
+                    "os_version": self.os_version,
+                    "battery": self.battery,
                     "plugin": PLUGIN_VERSION,
                     "mac": self.mac,
                 }
@@ -279,9 +287,7 @@ class Server:
                 await ws.send_json({"type": "result", "id": msg_id, "ok": False, "error": error})
                 return
             if self.state.status != STATUS_GAMING:
-                await ws.send_json(
-                    {"type": "result", "id": msg_id, "ok": False, "error": "not_in_gaming_mode"}
-                )
+                await ws.send_json({"type": "result", "id": msg_id, "ok": False, "error": "not_in_gaming_mode"})
                 return
             ok = await self._notify(payload)
             await ws.send_json(

@@ -57,6 +57,8 @@ class DeviceInfo:
     api: int
     paired: bool
     mac: str | None = None
+    os_version: str | None = None
+    has_battery: bool = False
 
 
 class SteamOSClient:
@@ -117,6 +119,8 @@ class SteamOSClient:
             api=int(data.get("api", 1)),
             paired=bool(data.get("paired", False)),
             mac=data.get("mac") or None,
+            os_version=data.get("os_version") or None,
+            has_battery=bool(data.get("battery")),
         )
         if info.api > SUPPORTED_API:
             raise UnsupportedApi(f"plugin API {info.api} > supported {SUPPORTED_API}")

@@ -1,4 +1,4 @@
-"""Sensors: status, running game, performance and system statistics."""
+"""Sensors: status, running game, system statistics and diagnostics."""
 
 from __future__ import annotations
 
@@ -20,13 +20,12 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
-    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import STATUS_DISCONNECTED, STATUS_GAMING
+from .const import CONF_HAS_BATTERY, STATUS_DISCONNECTED, STATUS_GAMING
 from .coordinator import SteamOSConfigEntry, SteamOSCoordinator, SteamOSData
 from .entity import SteamOSEntity
 
@@ -35,11 +34,11 @@ GAME_NONE = "none"
 
 @dataclass(frozen=True, kw_only=True)
 class SteamOSSensorDescription(SensorEntityDescription):
-    """Describes a sensor fed from one key of the ``sys`` or ``perf`` section."""
+    """Describes a sensor fed from one key of the ``sys`` section."""
 
-    section: str  # "sys" | "perf"
     source_key: str
     value_fn: Callable[[Any], Any] | None = None
+    requires_battery: bool = False
 
 
 def _timestamp(value: Any) -> datetime | None:
@@ -48,30 +47,8 @@ def _timestamp(value: Any) -> datetime | None:
 
 SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
-        key="fps",
-        translation_key="fps",
-        section="perf",
-        source_key="fps",
-        native_unit_of_measurement="FPS",
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        icon="mdi:speedometer",
-    ),
-    SteamOSSensorDescription(
-        key="frametime",
-        translation_key="frametime",
-        section="perf",
-        source_key="frametime_ms",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.MILLISECONDS,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        entity_registry_enabled_default=False,
-    ),
-    SteamOSSensorDescription(
         key="cpu_temperature",
         translation_key="cpu_temperature",
-        section="sys",
         source_key="cpu_temp",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -81,7 +58,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="gpu_temperature",
         translation_key="gpu_temperature",
-        section="sys",
         source_key="gpu_temp",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -91,7 +67,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="gpu_memory_temperature",
         translation_key="gpu_memory_temperature",
-        section="sys",
         source_key="gpu_mem_temp",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -102,7 +77,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="ssd_temperature",
         translation_key="ssd_temperature",
-        section="sys",
         source_key="ssd_temp",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -113,7 +87,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="cpu_usage",
         translation_key="cpu_usage",
-        section="sys",
         source_key="cpu_load",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -123,7 +96,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="cpu_frequency",
         translation_key="cpu_frequency",
-        section="sys",
         source_key="cpu_ghz",
         device_class=SensorDeviceClass.FREQUENCY,
         native_unit_of_measurement=UnitOfFrequency.GIGAHERTZ,
@@ -134,7 +106,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="memory_usage",
         translation_key="memory_usage",
-        section="sys",
         source_key="mem_pct",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -144,7 +115,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="gpu_usage",
         translation_key="gpu_usage",
-        section="sys",
         source_key="gpu_load",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -154,7 +124,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="vram_usage",
         translation_key="vram_usage",
-        section="sys",
         source_key="vram_pct",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -164,7 +133,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="gpu_power",
         translation_key="gpu_power",
-        section="sys",
         source_key="gpu_watt",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -174,7 +142,6 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
     SteamOSSensorDescription(
         key="fan_speed",
         translation_key="fan_speed",
-        section="sys",
         source_key="fan_rpm",
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -182,9 +149,18 @@ SENSORS: tuple[SteamOSSensorDescription, ...] = (
         icon="mdi:fan",
     ),
     SteamOSSensorDescription(
+        key="battery",
+        translation_key="battery",
+        source_key="battery_pct",
+        requires_battery=True,
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    SteamOSSensorDescription(
         key="last_boot",
         translation_key="last_boot",
-        section="sys",
         source_key="boot_time",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -198,8 +174,17 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: SteamOSConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    entities: list[SensorEntity] = [SteamOSStatusSensor(coordinator), SteamOSGameSensor(coordinator)]
-    entities.extend(SteamOSValueSensor(coordinator, description) for description in SENSORS)
+    has_battery = bool(entry.data.get(CONF_HAS_BATTERY))
+    entities: list[SensorEntity] = [
+        SteamOSStatusSensor(coordinator),
+        SteamOSGameSensor(coordinator),
+        SteamOSVersionSensor(coordinator),
+    ]
+    entities.extend(
+        SteamOSValueSensor(coordinator, description)
+        for description in SENSORS
+        if has_battery or not description.requires_battery
+    )
     if coordinator.artwork is not None:
         entities.append(SteamOSArtworkMatchSensor(coordinator))
     async_add_entities(entities)
@@ -234,6 +219,29 @@ class SteamOSStatusSensor(SteamOSEntity, SensorEntity):
         return {"websocket_connected": data.connected, "plugin_version": data.plugin_version}
 
 
+class SteamOSVersionSensor(SteamOSEntity, SensorEntity):
+    """Which SteamOS release the machine runs (diagnostic).
+
+    Known as soon as the plugin is reachable, so unlike most entities this one does
+    not need Gaming Mode — only a live connection.
+    """
+
+    _attr_translation_key = "os_version"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:linux"
+
+    def __init__(self, coordinator: SteamOSCoordinator) -> None:
+        super().__init__(coordinator, "os_version")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.data.connected and self.coordinator.data.os_version is not None
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.data.os_version
+
+
 class SteamOSGameSensor(SteamOSEntity, SensorEntity):
     """Title of the running game, or ``none``."""
 
@@ -251,13 +259,10 @@ class SteamOSGameSensor(SteamOSEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         game = self.coordinator.data.game or {}
-        perf = self.coordinator.data.perf or {}
-        focus = perf.get("focus")
         return {
             "appid": game.get("appid"),
             "shortcut": game.get("shortcut"),
             "started_at": game.get("started_at"),
-            "steam_ui_focused": None if focus is None else focus == "steam",
         }
 
 
@@ -300,7 +305,7 @@ class SteamOSArtworkMatchSensor(SteamOSEntity, SensorEntity):
 
 
 class SteamOSValueSensor(SteamOSEntity, SensorEntity):
-    """One numeric value from the ``sys`` or ``perf`` section."""
+    """One numeric value from the ``sys`` section."""
 
     entity_description: SteamOSSensorDescription
 
@@ -309,10 +314,7 @@ class SteamOSValueSensor(SteamOSEntity, SensorEntity):
         self.entity_description = description
 
     def _raw(self, data: SteamOSData) -> Any:
-        section = data.perf if self.entity_description.section == "perf" else data.sys
-        if not section:
-            return None
-        return section.get(self.entity_description.source_key)
+        return (data.sys or {}).get(self.entity_description.source_key)
 
     @property
     def available(self) -> bool:

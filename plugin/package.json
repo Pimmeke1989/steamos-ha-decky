@@ -1,6 +1,6 @@
 {
   "name": "steamos-ha",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Connects your Steam Machine to Home Assistant",
   "type": "module",
   "scripts": {

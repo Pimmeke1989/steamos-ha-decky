@@ -30,6 +30,8 @@ class Harness:
             machine_id="abc123def456",
             hostname="steammachine",
             model="Steam Machine",
+            os_version="3.8.16 (20260901.1)",
+            battery=True,
             show_code=self._show_code,
             notify=self._notify,
             power=self._power,
@@ -73,6 +75,8 @@ async def test_info_is_public(harness: Harness):
     assert data["id"] == "abc123def456"
     assert data["paired"] is False
     assert data["status"] == STATUS_DISCONNECTED
+    assert data["os_version"] == "3.8.16 (20260901.1)"
+    assert data["battery"] is True
 
 
 async def test_pair_requires_gaming_mode(harness: Harness):
@@ -151,11 +155,11 @@ async def test_updates_are_coalesced(harness: Harness):
         await ws.receive_json()
         await ws.receive_json()
         harness.server._last_send = asyncio.get_running_loop().time()  # force the 1 s window
-        await harness.server.broadcast(harness.state.set_perf(60, 16.7))
-        await harness.server.broadcast(harness.state.set_perf(61, 16.4))
-        await harness.server.broadcast(harness.state.set_perf(62, 16.1))
+        await harness.server.broadcast(harness.state.set_sys({"cpu_temp": 60.0}))
+        await harness.server.broadcast(harness.state.set_sys({"cpu_temp": 61.0}))
+        await harness.server.broadcast(harness.state.set_sys({"cpu_temp": 62.0}))
         upd = await ws.receive_json()
-        assert upd["perf"]["fps"] == 62
+        assert upd["sys"]["cpu_temp"] == 62.0
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(ws.receive_json(), 0.3)
 
@@ -172,6 +176,7 @@ async def test_power_http_and_ws(harness: Harness):
     async with harness.client.ws_connect("/api/ws", headers=headers) as ws:
         hello = await ws.receive_json()
         assert hello["mac"] == "50:5a:65:71:dd:4b"
+        assert hello["os_version"] == "3.8.16 (20260901.1)" and hello["battery"] is True
         await ws.receive_json()  # state
         await ws.send_json({"type": "power", "id": 3, "action": "shutdown"})
         assert (await ws.receive_json()) == {"type": "result", "id": 3, "ok": True, "error": None}
@@ -212,9 +217,6 @@ async def test_plugin_heartbeat_transitions(tmp_path, monkeypatch):
         self.backend = "none"
 
     monkeypatch.setattr(discovery.Discovery, "start", _no_discovery)
-    from steamos_ha import gamescope
-
-    monkeypatch.setattr(gamescope, "find_stats_pipe", lambda *a, **k: None)  # no gamescope here
     monkeypatch.setattr(plugin_main, "_local_ip", lambda: "10.0.0.5")  # no network probing in tests
     monkeypatch.setattr(plugin_main, "_local_mac", lambda: "50:5a:65:71:dd:4b")
 
@@ -235,6 +237,17 @@ async def test_plugin_heartbeat_transitions(tmp_path, monkeypatch):
         assert status["status"] == STATUS_GAMING
         await plugin.set_running_app(413150, "Stardew Valley", False)
         assert plugin.state.game["title"] == "Stardew Valley"
+
+        # A power action is handed to the frontend, which reports back what it managed to do.
+        assert await plugin._power_frontend("suspend") is True
+        assert decky.emitted[-1] == ("power", ("suspend",))
+        assert plugin.last_power["ok"] is None  # no answer yet
+        await plugin.power_result("suspend", True, "SteamClient.System.SuspendPC")
+        status = await plugin.get_status()
+        assert status["last_power"]["ok"] is True
+        assert status["last_power"]["detail"] == "SteamClient.System.SuspendPC"
+        await plugin.power_result("shutdown", False, "no usable call: User.StartShutdown (missing)")
+        assert (await plugin.get_status())["last_power"]["ok"] is False
 
         # watchdog fires after HEARTBEAT_TIMEOUT_S without heartbeats
         plugin.last_heartbeat = plugin.loop.time() - 10

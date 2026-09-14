@@ -59,12 +59,6 @@
           "none": "Geen game"
         }
       },
-      "fps": {
-        "name": "FPS"
-      },
-      "frametime": {
-        "name": "Frametijd"
-      },
       "cpu_temperature": {
         "name": "CPU-temperatuur"
       },
@@ -98,8 +92,14 @@
       "fan_speed": {
         "name": "Ventilatorsnelheid"
       },
+      "battery": {
+        "name": "Batterij"
+      },
       "last_boot": {
         "name": "Laatste opstart"
+      },
+      "os_version": {
+        "name": "SteamOS-versie"
       },
       "artwork_match": {
         "name": "Artwork-match",
@@ -116,6 +116,9 @@
     "binary_sensor": {
       "game_running": {
         "name": "Game actief"
+      },
+      "battery_charging": {
+        "name": "Batterij laadt op"
       }
     },
     "event": {

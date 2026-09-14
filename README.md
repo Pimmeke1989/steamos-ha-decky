@@ -17,7 +17,7 @@
 
 <p align="center">
   Your Steam Machine (or Steam Deck) as a device in Home Assistant: see what's being played,
-  watch temperatures and FPS, get notifications on the TV, and switch the machine on or off.
+  watch temperatures and battery, get notifications on the TV, and switch the machine on or off.
 </p>
 
 ---
@@ -31,8 +31,8 @@ sensors and buttons. In plain terms, it lets you:
   and a game sensor shows the title of whatever is running right now (also for non-Steam
   games you added as shortcuts).
 - **Keep an eye on the hardware.** CPU and GPU temperature, CPU/GPU/memory/VRAM usage,
-  GPU power draw, fan speed, SSD temperature, and the FPS and frame time of the game that is
-  running.
+  GPU power draw, fan speed and SSD temperature — plus battery level and charging state on
+  a machine that has a battery, such as a Steam Deck.
 - **Put messages on the TV.** Send a notification from any automation and it pops up as a
   toast in the Steam UI — "the laundry is done", "someone is at the door", "dinner in
   10 minutes".
@@ -130,8 +130,9 @@ entity and *Turn on* becomes `unavailable` while the machine is not in Gaming Mo
 | `sensor.<name>_cpu_frequency`* | GHz, average of all cores |
 | `sensor.<name>_gpu_power` | W |
 | `sensor.<name>_fan_speed` | rpm |
-| `sensor.<name>_fps`, `_frametime`* | Frames per second and milliseconds per frame of the running game, averaged over the last second |
+| `sensor.<name>_battery`, `binary_sensor.<name>_battery_charging` | Only on a machine with a battery (a Steam Deck, not a Steam Machine) |
 | `sensor.<name>_last_boot`* | When the machine last started |
+| `sensor.<name>_steamos_version` | Which SteamOS release is installed (diagnostic) |
 | `notify.<name>_on_screen_notification` | Send a message here and it pops up on the TV |
 | `button.<name>_sleep`, `_shut_down`, `_restart`* | Same as picking those from the Steam power menu |
 | `button.<name>_turn_on` | Sends a Wake-on-LAN packet |
@@ -200,8 +201,10 @@ evening** with `button.steam_machine_turn_on`.
 ## Power buttons and Wake-on-LAN
 
 *Sleep*, *Shut down* and *Restart* do exactly what the same options in the Steam power
-menu do. They only work while the machine is in Gaming Mode, since that is where the Steam
-UI lives.
+menu do — Steam closes the running game and syncs cloud saves first. They only work while
+the machine is in Gaming Mode, since that is where the Steam UI lives. The plugin panel
+shows what became of the last one under *Last power action*, so a button that does nothing
+is never a silent failure.
 
 *Turn on* works differently: Home Assistant sends a Wake-on-LAN "magic packet" to the
 machine's network card. The plugin tells the integration its MAC address during pairing, so
@@ -222,8 +225,10 @@ image entities. It searches by title rather than by Steam's app id on purpose: g
 added as non-Steam shortcuts get a random id that means nothing to anyone.
 
 Results are cached for 30 days, so a game costs a handful of requests once and nothing after
-that. When no game runs, the last artwork stays in place and `sensor.<name>_artwork_match`
-shows `none`, so your dashboard can decide for itself whether to keep showing the cover.
+that. When no game runs the image entities go unavailable and `sensor.<name>_artwork_match`
+shows `none`; start that game again and the artwork is back from the cache without any new
+requests. A dashboard card that shows the cover can hide itself with a condition on
+`binary_sensor.<name>_game_running`.
 
 If a title matches the wrong game, pin it under *Configure* with one line per game:
 `Game title = SteamGridDB game id`. The `steamos.refresh_artwork` action throws away the
@@ -246,13 +251,22 @@ the Steam UI, so Desktop Mode counts as "not available for gaming".
 Not every device exposes every sensor. The plugin reads whatever the hardware offers; a
 sensor that isn't there stays unavailable rather than showing a wrong number.
 
-**FPS shows nothing while a game is running.**
-Open the plugin panel: the *FPS* line says whether it could find gamescope's stats pipe.
-FPS is only reported while a game is in the foreground.
+**Where is the FPS sensor?**
+It was removed in 0.2.3. SteamOS has no interface that gives out the game's real frame rate:
+the on-screen overlay reads a private channel that only it can consume, and the one public
+source (gamescope's stats pipe) reports the compositor's paint rate once per 300 frames. The
+resulting number updated every few seconds and never matched the overlay, so it was more
+confusing than useful.
 
 **Can I use this with a Steam Deck?**
-Yes. Everything except Wake-on-LAN (the Deck is on Wi-Fi) works the same, and the Deck is
-where most of the testing happened.
+Yes — and on a Deck you also get the battery entities, which a desktop Steam Machine does
+not have. Wake-on-LAN is the one thing that will not work there, because the Deck is on
+Wi-Fi.
+
+**The battery entities are missing on my Steam Deck.**
+The plugin decides at startup whether the machine has a battery and tells Home Assistant in
+its first message. If the entities are not there, reload the integration once
+(*Settings → Devices & services → SteamOS → ⋮ → Reload*).
 
 **Is anything sent to the internet?**
 Only the optional SteamGridDB artwork lookups (with your own key) and the check for a newer

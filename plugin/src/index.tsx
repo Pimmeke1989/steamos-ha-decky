@@ -34,6 +34,7 @@ import {
   heartbeat,
   NotifyPayload,
   PluginStatus,
+  powerResult,
   setRunningApp,
   unpairAll,
 } from "./api";
@@ -44,6 +45,38 @@ declare const appStore: any;
 
 const HEARTBEAT_MS = 5000;
 const SHORTCUT_APP_TYPE = 1073741824;
+
+/**
+ * Steam's own power functions, per action, in the order we prefer them.
+ *
+ * The names are not stable across SteamOS releases — an earlier version of this
+ * plugin called `System.Suspend()` and `System.Shutdown()`, which simply do not
+ * exist (the real ones end in `PC`), so the buttons did nothing at all. Listing
+ * every candidate and calling the first one that is actually present keeps that
+ * from happening again. `User.Start*` is preferred where it exists because it is
+ * the graceful path the Steam power menu itself takes: Steam closes the game and
+ * syncs cloud saves first.
+ */
+type SteamCall = [path: string, ...args: unknown[]];
+
+const POWER_CALLS: Record<string, SteamCall[]> = {
+  suspend: [["System.SuspendPC"], ["System.Suspend"]],
+  shutdown: [["User.StartShutdown", false], ["System.ShutdownPC"]],
+  reboot: [["User.StartRestart", false], ["System.RestartPC"]],
+};
+
+/** Calls SteamClient.<path>(...args); false when that function does not exist here. */
+const callSteamClient = (path: string, args: unknown[]): boolean => {
+  const parts = path.split(".");
+  const name = parts.pop() as string;
+  let owner: any = SteamClient;
+  for (const part of parts) {
+    owner = owner?.[part];
+  }
+  if (typeof owner?.[name] !== "function") return false;
+  owner[name](...args);
+  return true;
+};
 
 // Icon names accepted by the steamos.notify action in Home Assistant.
 const ICONS: Record<string, JSX.Element> = {
@@ -169,23 +202,6 @@ const Content: FC = () => {
         </PanelSectionRow>
         <PanelSectionRow>
           <Field
-            label="FPS"
-            description={
-              status.fps.last_error
-                ? `gamescope: ${status.fps.last_error}`
-                : status.fps.active
-                  ? `via gamescope${status.fps.focus === "steam" ? " (Steam UI in front)" : ""}`
-                  : status.fps.enabled
-                    ? "starts with the next game"
-                    : "disabled"
-            }
-            focusable
-          >
-            {status.perf?.fps != null ? Math.round(status.perf.fps) : "—"}
-          </Field>
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <Field
             label="Address"
             description={status.mac ? `${status.hostname} · MAC ${status.mac}` : status.hostname}
             focusable
@@ -194,10 +210,27 @@ const Content: FC = () => {
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
+          <Field label="SteamOS" focusable>
+            {status.os_version ?? "unknown"}
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
           <Field label="mDNS" focusable>
             {status.discovery === "none" ? "unavailable (add manually)" : status.discovery}
           </Field>
         </PanelSectionRow>
+        {status.last_power && (
+          <PanelSectionRow>
+            <Field
+              label="Last power action"
+              description={status.last_power.detail}
+              focusable
+            >
+              {status.last_power.action}
+              {status.last_power.ok === false ? " — failed" : status.last_power.ok ? " — ok" : " — sent"}
+            </Field>
+          </PanelSectionRow>
+        )}
         <PanelSectionRow>
           <Field label="Plugin" focusable>
             v{status.version}
@@ -259,13 +292,24 @@ export default definePlugin(() => {
     }
   };
   const onPower = (action: string) => {
-    try {
-      if (action === "suspend") SteamClient.System.Suspend();
-      else if (action === "shutdown") SteamClient.System.Shutdown();
-      else if (action === "reboot") SteamClient.System.RestartPC();
-    } catch (err) {
-      console.error("[steamos-ha] power action failed", action, err);
+    const attempts = POWER_CALLS[action];
+    if (!attempts) {
+      powerResult(action, false, `unknown action ${action}`).catch(() => undefined);
+      return;
     }
+    const tried: string[] = [];
+    for (const [path, ...args] of attempts) {
+      try {
+        if (callSteamClient(path, args)) {
+          powerResult(action, true, `SteamClient.${path}`).catch(() => undefined);
+          return;
+        }
+        tried.push(`${path} (missing)`);
+      } catch (err) {
+        tried.push(`${path} (${err})`);
+      }
+    }
+    powerResult(action, false, `no usable call: ${tried.join(", ")}`).catch(() => undefined);
   };
   addEventListener<[NotifyPayload]>("notify", onNotify);
   addEventListener<[string | null]>("pairing_code", onPairingCode);

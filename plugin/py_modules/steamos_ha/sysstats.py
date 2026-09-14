@@ -10,6 +10,10 @@ Valve's Inkterface does it, so the code does not depend on hwmon numbering:
     nvme             SSD temperature
     steamdeck_hwmon  fan1_input (name to be confirmed on the Steam Machine)
 
+The battery, when there is one, comes from ``/sys/class/power_supply``: the first
+entry whose ``type`` is ``Battery`` and whose ``scope`` is not ``Device`` — that
+last check keeps connected controllers, which also register as batteries, out.
+
 Every reader returns ``None`` when the source is missing, so a metric that does
 not exist on this machine simply never becomes an entity in Home Assistant.
 """
@@ -38,6 +42,7 @@ THRESHOLDS: dict[str, float] = {
     "vram_pct": 1.0,
     "gpu_watt": 0.5,
     "fan_rpm": 50.0,
+    "battery_pct": 1.0,
 }
 
 FAN_HWMON_CANDIDATES = ("steamdeck_hwmon", "jupiter", "galileo", "nct6775", "it87", "asus", "oxp_platform")
@@ -67,6 +72,8 @@ class SysStats:
         self.proc_root = proc_root
         self._hwmon: dict[str, str] | None = None
         self._gpu_temp_nodes: dict[str, str] | None = None
+        self._battery: str | None = None
+        self._battery_scanned = False
         self._prev_cpu: tuple[float, float] | None = None
         self._cpu_load: float | None = None
         self._cpu_last_ts = 0.0
@@ -87,6 +94,8 @@ class SysStats:
     def rescan(self) -> None:
         self._hwmon = None
         self._gpu_temp_nodes = None
+        self._battery = None
+        self._battery_scanned = False
 
     def _hwmon_value(self, name: str, field: str, scale: float = 1.0) -> float | None:
         path = self.hwmon(name)
@@ -214,6 +223,38 @@ class SysStats:
             return (total - avail) / total * 100.0
         return None
 
+    # ------------------------------------------------------------- battery
+
+    def battery_path(self) -> str | None:
+        """Directory of the machine's own battery, or None on a device without one."""
+        if not self._battery_scanned:
+            self._battery_scanned = True
+            for path in sorted(glob.glob(os.path.join(self.sys_root, "class/power_supply/*"))):
+                if (_read(os.path.join(path, "type")) or "").lower() != "battery":
+                    continue
+                scope = (_read(os.path.join(path, "scope")) or "system").lower()
+                if scope != "system":
+                    continue  # a controller or headset, not this machine
+                self._battery = path
+                break
+            log.info("Battery: %s", self._battery or "none")
+        return self._battery
+
+    def has_battery(self) -> bool:
+        return self.battery_path() is not None
+
+    def battery_pct(self) -> float | None:
+        path = self.battery_path()
+        return _read_float(os.path.join(path, "capacity")) if path else None
+
+    def battery_charging(self) -> bool | None:
+        """True while the battery is actually taking charge ("Full" on AC is not charging)."""
+        path = self.battery_path()
+        if not path:
+            return None
+        status = _read(os.path.join(path, "status"))
+        return None if not status else status.lower() == "charging"
+
     def boot_time(self) -> str | None:
         raw = _read(os.path.join(self.proc_root, "uptime"))
         if not raw:
@@ -241,15 +282,17 @@ class SysStats:
             "vram_pct": self.vram_pct(),
             "gpu_watt": self.gpu_watt(),
             "fan_rpm": self.fan_rpm(),
+            "battery_pct": self.battery_pct(),
+            "battery_charging": self.battery_charging(),
             "boot_time": self.boot_time(),
         }
         return {k: _round(k, v) for k, v in raw.items()}
 
 
 def _round(key: str, value: Any) -> Any:
-    if value is None or isinstance(value, str):
+    if value is None or isinstance(value, str | bool):
         return value
-    if key in ("cpu_load", "mem_pct", "gpu_load", "vram_pct", "fan_rpm"):
+    if key in ("cpu_load", "mem_pct", "gpu_load", "vram_pct", "fan_rpm", "battery_pct"):
         return int(round(value))
     return round(float(value), 1)
 

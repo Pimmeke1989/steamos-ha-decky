@@ -18,11 +18,10 @@ from typing import Any
 import decky  # provided by Decky Loader
 
 from steamos_ha import HEARTBEAT_TIMEOUT_S, PLUGIN_VERSION
-from steamos_ha.discovery import Discovery, read_machine_id, read_model
-from steamos_ha.gamescope import GamescopeStats
+from steamos_ha.discovery import Discovery, read_machine_id, read_model, read_os_version
 from steamos_ha.server import Server
 from steamos_ha.settings import Settings
-from steamos_ha.state import STATUS_DISCONNECTED, STATUS_GAMING, State
+from steamos_ha.state import STATUS_DISCONNECTED, STATUS_GAMING, State, now_iso
 from steamos_ha.sysstats import SysStats, apply_thresholds
 
 SAMPLE_INTERVAL_S = 2.0
@@ -39,12 +38,13 @@ class Plugin:
         self.machine_id = read_machine_id()
         self.hostname = socket.gethostname() or "steammachine"
         self.model = read_model()
+        self.os_version = read_os_version()
         self.last_heartbeat: float = 0.0
         self.pairing_code: str | None = None
         self.server_error: str | None = None
+        self.last_power: dict[str, Any] | None = None
         self.stats = SysStats()
         self._last_sys_sent: dict[str, Any] | None = None
-        self.gamescope = self._make_gamescope()
 
         self.server = Server(
             self.settings,
@@ -52,6 +52,8 @@ class Plugin:
             machine_id=self.machine_id,
             hostname=self.hostname,
             model=self.model,
+            os_version=self.os_version,
+            battery=self.stats.has_battery(),
             show_code=self._show_pairing_code,
             notify=self._notify_frontend,
             power=self._power_frontend,
@@ -79,7 +81,6 @@ class Plugin:
             task = getattr(self, task_name, None)
             if task:
                 task.cancel()
-        await self.gamescope.stop()
         await self.discovery.stop()
         await self.server.stop()
 
@@ -111,10 +112,6 @@ class Plugin:
         if after and (not before or after.get("appid") != before.get("appid")):
             await self.server.broadcast(_event("game_started", after, update["ts"]))
         await self.server.broadcast(update)
-        if after is None:
-            await self.gamescope.stop()
-        elif before is None and self.settings.fps.get("enabled", True):
-            await self.gamescope.start()
 
     async def get_status(self) -> dict[str, Any]:
         """Everything the QAM panel shows."""
@@ -129,34 +126,23 @@ class Plugin:
             "connected": self.server.connected_clients,
             "pairing_code": self.pairing_code,
             "game": self.state.game,
-            "perf": self.state.perf,
             "hostname": self.hostname,
             "ip": _local_ip(),
             "mac": self.server.mac,
             "machine_id": self.machine_id,
-            "fps": {
-                "enabled": bool(self.settings.fps.get("enabled", True)),
-                "active": self.gamescope.active,
-                "last_error": self.gamescope.last_error,
-                "pipe": self.gamescope.pipe_path,
-                "focus": self.gamescope.focus,
-            },
+            "os_version": self.os_version,
+            "battery": self.stats.has_battery(),
+            "last_power": self.last_power,
         }
 
     async def get_settings(self) -> dict[str, Any]:
-        return {"port": self.settings.port, "fps": dict(self.settings.fps)}
+        return {"port": self.settings.port}
 
     async def set_settings(self, changes: dict[str, Any]) -> dict[str, Any]:
         old_port = self.settings.port
-        old_fps = dict(self.settings.fps)
         self.settings.update(changes or {})
         if self.settings.port != old_port:
             await self._restart_server()
-        if self.settings.fps != old_fps:
-            await self.gamescope.stop()
-            self.gamescope = self._make_gamescope()
-            if self.state.game and self.settings.fps.get("enabled", True):
-                await self.gamescope.start()
         return await self.get_settings()
 
     async def unpair_all(self) -> dict[str, Any]:
@@ -180,19 +166,28 @@ class Plugin:
         return True
 
     async def _power_frontend(self, action: str) -> bool:
-        """suspend / shutdown / reboot through the Steam client (SteamClient.System.*)."""
+        """suspend / shutdown / reboot through the Steam client (see POWER_CALLS in index.tsx).
+
+        The frontend does the work, so all this can confirm is that the request went
+        out; ``power_result`` reports back what actually happened.
+        """
         if self.state.status != STATUS_GAMING:
             return False
         log.info("Power action: %s", action)
+        self.last_power = {"action": action, "ok": None, "detail": "sent to the Steam UI", "at": now_iso()}
         await decky.emit("power", action)
         return True
 
-    # ---------------------------------------------------------------- internals
-    def _make_gamescope(self) -> GamescopeStats:
-        return GamescopeStats(self._on_perf, pipe_override=self.settings.fps.get("stats_pipe") or "")
+    async def power_result(self, action: str, ok: bool, detail: str = "") -> None:
+        """Frontend reports whether it could carry the power action out."""
+        self.last_power = {"action": action, "ok": bool(ok), "detail": detail, "at": now_iso()}
+        if ok:
+            log.info("Power action %s carried out (%s)", action, detail)
+        else:
+            log.error("Power action %s failed: %s", action, detail)
 
-    async def _on_perf(self, fps: float | None, frametime_ms: float | None, focus: str | None) -> None:
-        await self.server.broadcast(self.state.set_perf(fps, frametime_ms, focus))
+    # ---------------------------------------------------------------- internals
+
 
     async def _heartbeat_watchdog(self) -> None:
         while True:
@@ -202,7 +197,6 @@ class Plugin:
                     log.info("No heartbeat for %.0fs → status disconnected", HEARTBEAT_TIMEOUT_S)
                     await self.server.broadcast(self.state.set_status(STATUS_DISCONNECTED))
                     await self._show_pairing_code(None)
-                    await self.gamescope.stop()
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001

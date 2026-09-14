@@ -34,6 +34,7 @@ from .const import (
     CLIENT_NAME,
     CONF_API_KEY,
     CONF_ARTWORK_OVERRIDES,
+    CONF_HAS_BATTERY,
     CONF_MAC,
     CONF_MACHINE_ID,
     CONF_MODEL,
@@ -225,6 +226,7 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_MACHINE_ID: self._info.machine_id,
                         CONF_MODEL: self._info.model,
                         CONF_MAC: self._info.mac,
+                        CONF_HAS_BATTERY: self._info.has_battery,
                     },
                     options={CONF_API_KEY: api_key} if api_key else {},
                 )

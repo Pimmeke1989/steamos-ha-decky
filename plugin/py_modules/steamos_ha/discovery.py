@@ -159,6 +159,28 @@ def read_machine_id() -> str:
     return socket.gethostname()[:12]
 
 
+def read_os_version() -> str | None:
+    """SteamOS release from /etc/os-release, e.g. "3.8.16" (with the build id when present)."""
+    values: dict[str, str] = {}
+    for path in ("/etc/os-release", "/usr/lib/os-release"):
+        text = None
+        try:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            key, sep, value = line.partition("=")
+            if sep:
+                values[key.strip()] = value.strip().strip('"').strip("'")
+        break
+    version = values.get("VERSION_ID") or values.get("VERSION")
+    if not version:
+        return None
+    build = values.get("BUILD_ID")
+    return f"{version} ({build})" if build and build != version else version
+
+
 def read_model() -> str:
     try:
         with open("/sys/class/dmi/id/product_name", encoding="utf-8") as fh:

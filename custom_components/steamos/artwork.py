@@ -3,7 +3,9 @@
 Only active when the config entry has a SteamGridDB API key. Follows the game
 title from the main coordinator; on a change it searches SteamGridDB, picks the
 best cover (grid) and icon and caches the URLs for 30 days so a game costs at
-most three requests, ever.
+most three requests, ever. When no game runs the artwork is cleared — the image
+entities go unavailable rather than keep showing the last game — but the cached
+lookup stays, so starting that game again needs no new requests.
 """
 
 from __future__ import annotations
@@ -159,9 +161,16 @@ class ArtworkCoordinator(DataUpdateCoordinator[ArtworkData]):
     async def _async_lookup(self, title: str | None, force: bool = False) -> None:
         async with self._lock:
             if title is None:
-                # No game: keep the last artwork, but the match sensor says so.
+                # No game: drop the artwork so the image entities go unavailable rather
+                # than keep showing whatever was played last. The lookup itself stays in
+                # the cache, so starting that game again costs no extra API calls.
                 self.data.title = None
                 self.data.match_name = None
+                self.data.sgdb_id = None
+                self.data.urls = {}
+                self.data.overridden = False
+                self.data.error = None
+                self.data.updated = dt_util.utcnow()
                 self.async_set_updated_data(self.data)
                 return
             key = normalize_title(title)

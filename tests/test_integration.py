@@ -35,6 +35,8 @@ class FakePlugin:
             machine_id="abc123def456",
             hostname="steammachine",
             model="Steam Machine",
+            os_version="3.8.16",
+            battery=True,
             show_code=self._show_code,
             notify=self._notify,
             power=self._power,
@@ -276,6 +278,8 @@ async def test_zeroconf_pairing_and_entities(
                 "gpu_load": 92,
                 "gpu_watt": 98.5,
                 "fan_rpm": None,
+                "battery_pct": 83,
+                "battery_charging": True,
                 "boot_time": "2026-09-14T18:02:11+02:00",
             }
         )
@@ -285,10 +289,16 @@ async def test_zeroconf_pairing_and_entities(
     assert hass.states.get("sensor.steammachine_gpu_power").state == "98.5"
     assert hass.states.get("sensor.steammachine_cpu_usage").state == "37"
     assert hass.states.get("sensor.steammachine_fan_speed").state == "unavailable"
-    assert hass.states.get("sensor.steammachine_fps").state == "unavailable"  # no perf yet
 
-    await plugin.server.broadcast(plugin.state.set_perf(118.4, 8.45))
-    await _wait_for(hass, "sensor.steammachine_fps", "118.4")
+    # battery entities exist because /api/info said this machine has one
+    assert hass.states.get("sensor.steammachine_battery").state == "83"
+    assert hass.states.get("binary_sensor.steammachine_battery_charging").state == "on"
+    assert entry.data["has_battery"] is True
+
+    # SteamOS version is a diagnostic and comes from hello, not from the sys sample
+    # (entity id follows the display name "SteamOS version")
+    version = hass.states.get("sensor.steammachine_steamos_version")
+    assert version.state == "3.8.16"
 
     # plugin reports desktop mode → sensor flips, notify raises, stats unavailable
     await plugin.server.broadcast(plugin.state.set_status(STATUS_DISCONNECTED))
@@ -297,8 +307,9 @@ async def test_zeroconf_pairing_and_entities(
     assert hass.states.get("sensor.steammachine_game").state == "unavailable"
     assert hass.states.get("button.steammachine_sleep").state == "unavailable"
     assert hass.states.get("button.steammachine_turn_on").state != "unavailable"  # the point of turn on
-    await _wait_for(hass, "sensor.steammachine_artwork_match", "none")  # no game → no match, art stays
-    assert hass.states.get("image.steammachine_cover").state not in ("unknown", "unavailable")
+    # no game → the artwork clears instead of lingering on the last title
+    await _wait_for(hass, "sensor.steammachine_artwork_match", "none")
+    await _wait_for(hass, "image.steammachine_cover", "unavailable")
     with pytest.raises(Exception, match="Gaming Mode"):
         await hass.services.async_call(
             "notify",
@@ -307,9 +318,15 @@ async def test_zeroconf_pairing_and_entities(
             blocking=True,
         )
 
-    # back to gaming
+    # back to gaming, same game again → artwork returns from the cache, no new API calls
+    sgdb.requests.clear()
     await plugin.server.broadcast(plugin.state.set_status(STATUS_GAMING))
     await _wait_for(hass, "sensor.steammachine_status", STATUS_GAMING)
+    await plugin.server.broadcast(plugin.state.set_game(1145350, "Hades II", False))
+    await _wait_for(hass, "sensor.steammachine_artwork_match", "Hades II")
+    cover = hass.states.get("image.steammachine_cover")
+    assert cover.state != "unavailable" and cover.attributes["sgdb_id"] == 5138
+    assert sgdb.requests == []  # served from the cache
 
     # unload cleanly
     assert await hass.config_entries.async_unload(entry.entry_id)

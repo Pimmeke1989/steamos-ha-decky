@@ -41,14 +41,10 @@ Copy the `plugin/` folder (with `dist/` and the vendored `py_modules/`) to
 `~/homebrew/plugins/SteamOS HA/` on the device and reload plugins from Decky's settings,
 or install the zip that CI builds. The plugin logs to `~/homebrew/logs/SteamOS HA/`.
 
-Two helper scripts are handy when something does not show up:
-
-- `scripts/steamos-inventory.sh` prints everything the plugin relies on: hwmon names,
-  the Decky user, steamos-manager on D-Bus, gamescope/MangoHud processes.
-- `scripts/fps-probe.py` checks the possible FPS sources and prints what each one reports.
-
-Run them over SSH in Gaming Mode (`ssh deck@<ip>`), because that is the mode the plugin
-cares about.
+When something does not show up, `scripts/steamos-inventory.sh` prints everything the
+plugin relies on: hwmon names, the power-supply nodes behind the battery entities, the
+Decky user, and steamos-manager on D-Bus. Run it over SSH in Gaming Mode
+(`ssh deck@<ip>`), because that is the mode the plugin cares about.
 
 ## Releasing
 

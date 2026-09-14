@@ -91,27 +91,16 @@ show "DeviceModel" busctl --user get-property com.steampowered.SteamOSManager1 /
 show "TdpLimit" busctl --user get-property com.steampowered.SteamOSManager1 /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1.TdpLimit1 TdpLimit
 show "HdmiCecState" busctl --user get-property com.steampowered.SteamOSManager1 /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1.HdmiCec1 HdmiCecState
 
-section "MangoHud / mangoapp"
-show "mangohud" which mangohud
-show "mangoapp" which mangoapp
-show "mangohudctl" which mangohudctl
-show "mangohud versie" bash -c "mangohud --version 2>/dev/null || pacman -Q mangohud 2>/dev/null"
-show "mangoapp procs" pgrep -a mangoapp
-ls -la "$HOME/.config/MangoHud/" 2>/dev/null
-cat "$HOME/.config/MangoHud/MangoHud.conf" 2>/dev/null | head -n 40
-show "MANGOHUD env (deze shell)" bash -c "printenv | grep -i mango"
-for pid in $(pgrep -x mangoapp 2>/dev/null); do
-  echo "-- mangoapp pid $pid environment (MANGOHUD*):"
-  tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep -i mangohud
-  cfg=$(tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep '^MANGOHUD_CONFIGFILE=' | cut -d= -f2-)
-  if [ -n "$cfg" ]; then echo "-- inhoud van $cfg:"; cat "$cfg" 2>/dev/null; ls -la "$cfg" 2>/dev/null; fi
+section "Batterij / power supply"
+# De plugin pakt het eerste apparaat met type=Battery waarvan scope niet Device is;
+# een aangesloten controller meldt zich namelijk ook als batterij.
+for ps in /sys/class/power_supply/*; do
+  [ -d "$ps" ] || continue
+  echo "-- $ps"
+  for f in type scope status capacity capacity_level present online model_name; do
+    [ -r "$ps/$f" ] && printf '   %s = %s\n' "$f" "$(cat "$ps/$f" 2>/dev/null)"
+  done
 done
-for pid in $(pgrep -x gamescope 2>/dev/null | head -n 1); do
-  echo "-- gamescope pid $pid environment (MANGOHUD*):"
-  tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep -i mangohud
-done
-show "sysv msg queues" ipcs -q
-ls -la /tmp/mangoapp* /tmp/MangoHud* 2>/dev/null
 
 section "Audio"
 show "wpctl status" bash -c "wpctl status 2>/dev/null | head -n 40"

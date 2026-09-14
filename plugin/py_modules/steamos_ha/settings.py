@@ -7,7 +7,6 @@ Stored shape::
       "clients": [
         {"token_sha256": "...", "name": "Home Assistant (woonkamer)", "created": "2026-09-14T20:00:00+02:00"}
       ],
-      "fps": {"enabled": true, "stats_pipe": ""}
     }
 """
 
@@ -26,7 +25,6 @@ from . import DEFAULT_PORT
 _DEFAULTS: dict[str, Any] = {
     "port": DEFAULT_PORT,
     "clients": [],
-    "fps": {"enabled": True, "stats_pipe": ""},
 }
 
 
@@ -57,9 +55,8 @@ class Settings:
         if isinstance(loaded, dict):
             merged = json.loads(json.dumps(_DEFAULTS))
             merged.update(loaded)
-            if isinstance(loaded.get("fps"), dict):
-                merged["fps"] = {**_DEFAULTS["fps"], **loaded["fps"]}
-            merged.pop("mangohud", None)  # pre-0.1.0 setting, no longer used
+            for gone in ("mangohud", "fps"):  # settings from earlier versions
+                merged.pop(gone, None)
             self.data = merged
 
     def save(self) -> None:
@@ -107,9 +104,7 @@ class Settings:
     def issue_token(self, client_name: str) -> str:
         """Create a new bearer token for a client; only the hash is stored."""
         token = secrets.token_urlsafe(32)
-        self.clients.append(
-            {"token_sha256": hash_token(token), "name": client_name[:80], "created": _now_iso()}
-        )
+        self.clients.append({"token_sha256": hash_token(token), "name": client_name[:80], "created": _now_iso()})
         self.save()
         return token
 
@@ -132,20 +127,10 @@ class Settings:
         self.data["clients"] = []
         self.save()
 
-    @property
-    def fps(self) -> dict[str, Any]:
-        cfg = self.data.get("fps")
-        if not isinstance(cfg, dict):
-            cfg = dict(_DEFAULTS["fps"])
-            self.data["fps"] = cfg
-        return cfg
-
     def update(self, changes: dict[str, Any]) -> None:
         """Apply a partial update coming from the plugin UI (never touches clients)."""
         if "port" in changes:
             port = int(changes["port"])
             if 1024 <= port <= 65535:
                 self.data["port"] = port
-        if isinstance(changes.get("fps"), dict):
-            self.fps.update({k: v for k, v in changes["fps"].items() if k in _DEFAULTS["fps"]})
         self.save()
