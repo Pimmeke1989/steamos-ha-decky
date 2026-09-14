@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .artwork import ArtworkCoordinator
 from .client import SteamOSClient
 from .const import DOMAIN, STATUS_DISCONNECTED, STATUS_GAMING
 
@@ -51,6 +52,7 @@ class SteamOSCoordinator(DataUpdateCoordinator[SteamOSData]):
             update_interval=None,
         )
         self.client = client
+        self.artwork: ArtworkCoordinator | None = None
         self._task: asyncio.Task | None = None
         self._event_listeners: list[Callable[[dict[str, Any]], None]] = []
         self.data = SteamOSData()

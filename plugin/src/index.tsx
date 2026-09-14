@@ -13,7 +13,20 @@ import {
   staticClasses,
 } from "@decky/ui";
 import { FC, useEffect, useState } from "react";
-import { FaHome } from "react-icons/fa";
+import {
+  FaBell,
+  FaCar,
+  FaCheckCircle,
+  FaClock,
+  FaComment,
+  FaDoorOpen,
+  FaExclamationTriangle,
+  FaHome,
+  FaInfoCircle,
+  FaPhone,
+  FaSun,
+  FaTshirt,
+} from "react-icons/fa";
 
 import {
   cancelPairing,
@@ -31,6 +44,22 @@ declare const appStore: any;
 
 const HEARTBEAT_MS = 5000;
 const SHORTCUT_APP_TYPE = 1073741824;
+
+// Icon names accepted by the steamos.notify action in Home Assistant.
+const ICONS: Record<string, JSX.Element> = {
+  home: <FaHome />,
+  bell: <FaBell />,
+  info: <FaInfoCircle />,
+  alert: <FaExclamationTriangle />,
+  check: <FaCheckCircle />,
+  door: <FaDoorOpen />,
+  phone: <FaPhone />,
+  message: <FaComment />,
+  washer: <FaTshirt />,
+  car: <FaCar />,
+  clock: <FaClock />,
+  sun: <FaSun />,
+};
 
 // ----------------------------------------------------------------- game tracking
 
@@ -212,7 +241,7 @@ export default definePlugin(() => {
       title: payload.title || "Home Assistant",
       body: payload.message,
       duration: Math.round((payload.duration || 6) * 1000),
-      icon: <FaHome />,
+      icon: ICONS[payload.icon] ?? ICONS.home,
     });
   };
   const onPairingCode = (code: string | null) => {

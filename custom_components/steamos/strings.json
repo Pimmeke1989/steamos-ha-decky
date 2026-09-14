@@ -20,6 +20,13 @@
         "data": {
           "code": "Pairing code"
         }
+      },
+      "artwork": {
+        "title": "Game artwork (optional)",
+        "description": "With a SteamGridDB API key the integration adds image entities with the cover, hero banner, logo and icon of the running game, looked up by title. Leave empty to skip; you can add a key later under Configure. Get a key at https://www.steamgriddb.com/profile/preferences/api",
+        "data": {
+          "api_key": "SteamGridDB API key"
+        }
       }
     },
     "error": {
@@ -27,7 +34,9 @@
       "not_in_gaming_mode": "The Steam Machine is not in Gaming Mode. Switch to Gaming Mode and try again.",
       "wrong_code": "That code is not correct. Check the screen and try again.",
       "pair_expired": "The pairing code expired. A new code is shown on screen.",
-      "pair_failed": "Pairing failed. Check the Decky plugin log."
+      "pair_failed": "Pairing failed. Check the Decky plugin log.",
+      "invalid_api_key": "SteamGridDB rejected this API key.",
+      "sgdb_unreachable": "SteamGridDB could not be reached. Check your internet connection and try again."
     },
     "abort": {
       "already_configured": "This Steam Machine is already configured.",
@@ -91,6 +100,12 @@
       },
       "last_boot": {
         "name": "Last boot"
+      },
+      "artwork_match": {
+        "name": "Artwork match",
+        "state": {
+          "none": "No match"
+        }
       }
     },
     "notify": {
@@ -115,6 +130,20 @@
           }
         }
       }
+    },
+    "image": {
+      "artwork_grid": {
+        "name": "Cover"
+      },
+      "artwork_hero": {
+        "name": "Hero banner"
+      },
+      "artwork_logo": {
+        "name": "Logo"
+      },
+      "artwork_icon": {
+        "name": "Icon"
+      }
     }
   },
   "exceptions": {
@@ -123,6 +152,50 @@
     },
     "notify_failed": {
       "message": "The notification could not be sent: {error}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SteamOS options",
+        "description": "Artwork via SteamGridDB. An empty API key turns the artwork entities off. Overrides: one per line, `Game title = SteamGridDB game id`, for titles that match the wrong game.",
+        "data": {
+          "api_key": "SteamGridDB API key",
+          "artwork_overrides": "Title overrides"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "SteamGridDB rejected this API key.",
+      "sgdb_unreachable": "SteamGridDB could not be reached. Check your internet connection and try again."
+    }
+  },
+  "services": {
+    "notify": {
+      "name": "Show notification",
+      "description": "Shows a toast on the Steam Machine's screen (Gaming Mode only).",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "Bold first line of the toast."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Body text."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Seconds the toast stays on screen (1–60)."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "Icon shown next to the toast."
+        }
+      }
+    },
+    "refresh_artwork": {
+      "name": "Refresh artwork",
+      "description": "Forget the cached SteamGridDB result for the current game and look it up again."
     }
   }
 }

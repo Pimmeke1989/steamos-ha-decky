@@ -7,11 +7,20 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
+from . import artwork as artwork_mod
+from .artwork import SteamGridDBAuthError, SteamGridDBClient, SteamGridDBError
 from .client import (
     CannotConnect,
     DeviceInfo,
@@ -22,6 +31,8 @@ from .client import (
 )
 from .const import (
     CLIENT_NAME,
+    CONF_API_KEY,
+    CONF_ARTWORK_OVERRIDES,
     CONF_MACHINE_ID,
     CONF_MODEL,
     CONF_TOKEN,
@@ -38,6 +49,20 @@ STEP_USER_SCHEMA = vol.Schema(
     }
 )
 STEP_PAIR_SCHEMA = vol.Schema({vol.Required("code"): str})
+STEP_ARTWORK_SCHEMA = vol.Schema(
+    {vol.Optional(CONF_API_KEY, default=""): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
+)
+
+
+async def _validate_api_key(hass, api_key: str, errors: dict[str, str]) -> bool:
+    client = SteamGridDBClient(async_get_clientsession(hass), api_key, artwork_mod.SGDB_BASE_URL)
+    try:
+        await client.validate()
+    except SteamGridDBAuthError:
+        errors[CONF_API_KEY] = "invalid_api_key"
+    except SteamGridDBError:
+        errors[CONF_API_KEY] = "sgdb_unreachable"
+    return not errors
 
 
 class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -50,6 +75,12 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
         self._port: int = DEFAULT_PORT
         self._info: DeviceInfo | None = None
         self._client: SteamOSClient | None = None
+        self._token: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> SteamOSOptionsFlow:
+        return SteamOSOptionsFlow()
 
     # ----------------------------------------------------------- discovery
 
@@ -148,16 +179,8 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
                     except Exception:  # noqa: BLE001
                         pass
             else:
-                return self.async_create_entry(
-                    title=self._info.name,
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: token,
-                        CONF_MACHINE_ID: self._info.machine_id,
-                        CONF_MODEL: self._info.model,
-                    },
-                )
+                self._token = token
+                return await self.async_step_artwork()
 
         return self.async_show_form(
             step_id="pair",
@@ -165,3 +188,49 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"name": self._info.name, "host": self._host or ""},
         )
+
+    # ------------------------------------------------------------- artwork
+
+    async def async_step_artwork(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Optional SteamGridDB API key; leave empty to skip artwork entirely."""
+        assert self._info is not None and self._token is not None
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            api_key = (user_input.get(CONF_API_KEY) or "").strip()
+            if not api_key or await _validate_api_key(self.hass, api_key, errors):
+                return self.async_create_entry(
+                    title=self._info.name,
+                    data={
+                        CONF_HOST: self._host,
+                        CONF_PORT: self._port,
+                        CONF_TOKEN: self._token,
+                        CONF_MACHINE_ID: self._info.machine_id,
+                        CONF_MODEL: self._info.model,
+                    },
+                    options={CONF_API_KEY: api_key} if api_key else {},
+                )
+        return self.async_show_form(step_id="artwork", data_schema=STEP_ARTWORK_SCHEMA, errors=errors)
+
+
+class SteamOSOptionsFlow(OptionsFlow):
+    """SteamGridDB API key (empty = artwork off) and title → id overrides."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            api_key = (user_input.get(CONF_API_KEY) or "").strip()
+            overrides = (user_input.get(CONF_ARTWORK_OVERRIDES) or "").strip()
+            if not api_key or await _validate_api_key(self.hass, api_key, errors):
+                return self.async_create_entry(data={CONF_API_KEY: api_key, CONF_ARTWORK_OVERRIDES: overrides})
+        options = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_API_KEY, default=options.get(CONF_API_KEY, "")): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(CONF_ARTWORK_OVERRIDES, default=options.get(CONF_ARTWORK_OVERRIDES, "")): TextSelector(
+                    TextSelectorConfig(multiline=True)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

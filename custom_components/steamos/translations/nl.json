@@ -20,6 +20,13 @@
         "data": {
           "code": "Koppelcode"
         }
+      },
+      "artwork": {
+        "title": "Game-artwork (optioneel)",
+        "description": "Met een SteamGridDB-API-key voegt de integratie image-entiteiten toe met de cover, hero-banner, het logo en het icoon van de draaiende game, opgezocht op titel. Leeg laten om over te slaan; je kunt later alsnog een key toevoegen onder Configureren. Een key haal je op https://www.steamgriddb.com/profile/preferences/api",
+        "data": {
+          "api_key": "SteamGridDB-API-key"
+        }
       }
     },
     "error": {
@@ -27,7 +34,9 @@
       "not_in_gaming_mode": "De Steam Machine staat niet in Gaming Mode. Schakel over naar Gaming Mode en probeer opnieuw.",
       "wrong_code": "Die code klopt niet. Kijk op het scherm en probeer opnieuw.",
       "pair_expired": "De koppelcode is verlopen. Er staat een nieuwe code op het scherm.",
-      "pair_failed": "Koppelen is mislukt. Bekijk het log van de Decky-plugin."
+      "pair_failed": "Koppelen is mislukt. Bekijk het log van de Decky-plugin.",
+      "invalid_api_key": "SteamGridDB accepteert deze API-key niet.",
+      "sgdb_unreachable": "SteamGridDB is niet bereikbaar. Controleer de internetverbinding en probeer opnieuw."
     },
     "abort": {
       "already_configured": "Deze Steam Machine is al toegevoegd.",
@@ -91,6 +100,12 @@
       },
       "last_boot": {
         "name": "Laatste opstart"
+      },
+      "artwork_match": {
+        "name": "Artwork-match",
+        "state": {
+          "none": "Geen match"
+        }
       }
     },
     "notify": {
@@ -115,6 +130,20 @@
           }
         }
       }
+    },
+    "image": {
+      "artwork_grid": {
+        "name": "Cover"
+      },
+      "artwork_hero": {
+        "name": "Hero-banner"
+      },
+      "artwork_logo": {
+        "name": "Logo"
+      },
+      "artwork_icon": {
+        "name": "Icoon"
+      }
     }
   },
   "exceptions": {
@@ -123,6 +152,50 @@
     },
     "notify_failed": {
       "message": "De melding kon niet worden verstuurd: {error}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SteamOS-opties",
+        "description": "Artwork via SteamGridDB. Een lege API-key schakelt de artwork-entiteiten uit. Overrides: één per regel, `Gametitel = SteamGridDB-game-id`, voor titels die op de verkeerde game matchen.",
+        "data": {
+          "api_key": "SteamGridDB-API-key",
+          "artwork_overrides": "Titel-overrides"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "SteamGridDB accepteert deze API-key niet.",
+      "sgdb_unreachable": "SteamGridDB is niet bereikbaar. Controleer de internetverbinding en probeer opnieuw."
+    }
+  },
+  "services": {
+    "notify": {
+      "name": "Melding tonen",
+      "description": "Toont een toast op het scherm van de Steam Machine (alleen in Gaming Mode).",
+      "fields": {
+        "title": {
+          "name": "Titel",
+          "description": "Vetgedrukte eerste regel van de toast."
+        },
+        "message": {
+          "name": "Bericht",
+          "description": "Tekst van de melding."
+        },
+        "duration": {
+          "name": "Duur",
+          "description": "Seconden dat de toast zichtbaar blijft (1–60)."
+        },
+        "icon": {
+          "name": "Icoon",
+          "description": "Icoon naast de toast."
+        }
+      }
+    },
+    "refresh_artwork": {
+      "name": "Artwork vernieuwen",
+      "description": "Vergeet het gecachte SteamGridDB-resultaat voor de huidige game en zoek opnieuw."
     }
   }
 }

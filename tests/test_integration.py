@@ -45,6 +45,69 @@ class FakePlugin:
         return True
 
 
+class FakeSteamGridDB:
+    """Minimal SteamGridDB v2 stand-in: one known game, one asset per type."""
+
+    def __init__(self) -> None:
+        from aiohttp import web
+
+        self.requests: list[str] = []
+        self.app = web.Application()
+        self.app.add_routes(
+            [
+                web.get("/search/autocomplete/{term}", self.search),
+                web.get("/{kind}/game/{game_id}", self.assets),
+            ]
+        )
+
+    async def _auth(self, request):
+        from aiohttp import web
+
+        if request.headers.get("Authorization") != "Bearer good-key":
+            return web.json_response({"success": False, "errors": ["Unauthorized"]}, status=401)
+        return None
+
+    async def search(self, request):
+        from aiohttp import web
+
+        if (denied := await self._auth(request)) is not None:
+            return denied
+        term = request.match_info["term"]
+        self.requests.append(f"search:{term}")
+        if "hades" in term.lower():
+            return web.json_response({"success": True, "data": [{"id": 5138, "name": "Hades II", "types": ["steam"]}]})
+        return web.json_response({"success": True, "data": []})
+
+    async def assets(self, request):
+        from aiohttp import web
+
+        if (denied := await self._auth(request)) is not None:
+            return denied
+        kind = request.match_info["kind"]
+        self.requests.append(f"{kind}:{request.match_info['game_id']}")
+        if kind == "icons":
+            return web.json_response({"success": True, "data": []})
+        return web.json_response(
+            {
+                "success": True,
+                "data": [
+                    {"id": 1, "score": 3, "url": f"https://cdn.example/{kind}-low.png"},
+                    {"id": 2, "score": 9, "url": f"https://cdn.example/{kind}-best.png"},
+                ],
+            }
+        )
+
+
+@pytest.fixture
+async def sgdb(monkeypatch):
+    from custom_components.steamos import artwork as artwork_mod
+
+    fake = FakeSteamGridDB()
+    async with TestServer(fake.app) as srv:
+        monkeypatch.setattr(artwork_mod, "SGDB_BASE_URL", f"http://127.0.0.1:{srv.port}")
+        yield fake
+
+
 @pytest.fixture
 async def plugin(tmp_path):
     fake = FakePlugin(tmp_path)
@@ -66,7 +129,7 @@ async def _wait_for(hass: HomeAssistant, entity_id: str, state: str, timeout: fl
     raise AssertionError(f"{entity_id} never became {state!r}; is {hass.states.get(entity_id)}")
 
 
-async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePlugin) -> None:
+async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePlugin, sgdb: FakeSteamGridDB) -> None:
     info = ZeroconfServiceInfo(
         ip_address=ip_address(plugin.host),
         ip_addresses=[ip_address(plugin.host)],
@@ -90,8 +153,15 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     assert result["type"] is FlowResultType.FORM and result["errors"] == {"base": "wrong_code"}
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"code": plugin.code})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "artwork"
+
+    # bad key is rejected, good key accepted
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"api_key": "bad"})
+    assert result["type"] is FlowResultType.FORM and result["errors"] == {"api_key": "invalid_api_key"}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"api_key": "good-key"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     entry = result["result"]
+    assert entry.options == {"api_key": "good-key"}
     assert entry.unique_id == "abc123def456"
     assert entry.data[CONF_HOST] == plugin.host and entry.data[CONF_PORT] == plugin.port
     assert plugin.settings.token_valid(entry.data[CONF_TOKEN])
@@ -126,6 +196,22 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     ev = hass.states.get("event.steammachine_game")
     assert ev.attributes["event_type"] == "game_started" and ev.attributes["title"] == "Hades II"
 
+    # artwork: looked up by title, best-scored asset wins, icon missing → unavailable
+    await _wait_for(hass, "sensor.steammachine_artwork_match", "Hades II")
+    match = hass.states.get("sensor.steammachine_artwork_match")
+    assert match.attributes["sgdb_id"] == 5138 and match.attributes["assets"] == ["grid", "hero", "logo"]
+    grid = hass.states.get("image.steammachine_cover")
+    assert grid.state not in ("unknown", "unavailable")
+    assert hass.states.get("image.steammachine_icon").state == "unavailable"
+    assert entry.runtime_data.artwork.data.urls["grid"] == "https://cdn.example/grids-best.png"
+    lookups = [r for r in sgdb.requests if r != "search:portal"]  # "portal" = API-key validation
+    assert lookups == ["search:Hades II", "grids:5138", "heroes:5138", "logos:5138", "icons:5138"]
+
+    # refresh action → cache dropped, looked up again
+    await hass.services.async_call(DOMAIN, "refresh_artwork", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert sgdb.requests.count("search:Hades II") == 2
+
     # system stats → value sensors; missing metric stays unavailable
     await plugin.server.broadcast(
         plugin.state.set_sys(
@@ -148,6 +234,8 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     await _wait_for(hass, "sensor.steammachine_status", STATUS_DISCONNECTED)
     assert hass.states.get("sensor.steammachine_cpu_temperature").state == "unavailable"
     assert hass.states.get("sensor.steammachine_game").state == "unavailable"
+    await _wait_for(hass, "sensor.steammachine_artwork_match", "none")  # no game → no match, art stays
+    assert hass.states.get("image.steammachine_cover").state not in ("unknown", "unavailable")
     with pytest.raises(Exception, match="Gaming Mode"):
         await hass.services.async_call(
             "notify",
@@ -207,3 +295,33 @@ async def test_server_gone_marks_disconnected(hass: HomeAssistant, plugin: FakeP
             {"entity_id": "notify.steammachine_on_screen_notification", "message": "x"},
             blocking=True,
         )
+
+
+async def test_without_api_key_no_artwork_entities(hass: HomeAssistant, plugin: FakePlugin) -> None:
+    token = plugin.settings.issue_token("test")
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    mock = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="abc123def456",
+        title="steammachine",
+        data={CONF_HOST: plugin.host, CONF_PORT: plugin.port, CONF_TOKEN: token, "machine_id": "abc123def456"},
+        options={},
+    )
+    mock.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock.entry_id)
+    await _wait_for(hass, "sensor.steammachine_status", STATUS_GAMING)
+    assert hass.states.get("image.steammachine_cover") is None
+    assert hass.states.get("sensor.steammachine_artwork_match") is None
+
+    # steamos.notify with duration + icon reaches the plugin
+    await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {"entity_id": "notify.steammachine_on_screen_notification", "message": "Deur", "duration": 12, "icon": "door"},
+        blocking=True,
+    )
+    assert plugin.toasts[-1] == {"title": "Home Assistant", "message": "Deur", "duration": 12.0, "icon": "door"}
+
+    assert await hass.config_entries.async_unload(mock.entry_id)
+    await hass.async_block_till_done()

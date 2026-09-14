@@ -17,3 +17,8 @@ STATUS_GAMING: Final = "gaming"
 STATUS_DISCONNECTED: Final = "disconnected"
 
 CLIENT_NAME: Final = "Home Assistant"
+
+# Artwork module (config entry options)
+CONF_API_KEY: Final = "api_key"
+CONF_ARTWORK_OVERRIDES: Final = "artwork_overrides"
+SERVICE_REFRESH_ARTWORK: Final = "refresh_artwork"

@@ -1,0 +1,42 @@
+notify:
+  target:
+    entity:
+      integration: steamos
+      domain: notify
+  fields:
+    title:
+      example: "Doorbell"
+      selector:
+        text:
+    message:
+      required: true
+      example: "Someone is at the door"
+      selector:
+        text:
+    duration:
+      default: 6
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: s
+    icon:
+      default: home
+      selector:
+        select:
+          options:
+            - home
+            - bell
+            - info
+            - alert
+            - check
+            - door
+            - phone
+            - message
+            - washer
+            - car
+            - clock
+            - sun
+
+refresh_artwork: {}

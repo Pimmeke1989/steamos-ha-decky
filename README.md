@@ -11,9 +11,10 @@ Two parts, one repo:
 
 No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
 
-> **Status: milestone 3.** Working today: discovery, pairing, status, running game, system
-> statistics (temperatures, load, power, fan), FPS via MangoHud and on-screen notifications.
-> Artwork via SteamGridDB (milestone 5) follows — see `docs/design.md`.
+> **Status: milestone 5 of 6.** Working today: discovery, pairing, status, running game,
+> system statistics (temperatures, load, power, fan), FPS via MangoHud, on-screen
+> notifications and optional game artwork via SteamGridDB. Not yet tested on a real
+> Steam Machine — see `docs/design.md` for what to verify.
 
 ## How it works
 
@@ -59,6 +60,9 @@ Manual: copy `custom_components/steamos` into your `config/custom_components/` a
 2. Home Assistant should discover it ("Steam Machine found" under *Settings → Devices & services*).
    If not, add the **SteamOS** integration manually with the hostname or IP and port `8570`.
 3. Confirm; a 6-digit code appears on the TV and in the plugin's panel. Type it in Home Assistant.
+4. Optionally enter a [SteamGridDB API key](https://www.steamgriddb.com/profile/preferences/api)
+   for artwork entities. Leave it empty to skip; you can add or remove it later under
+   *Configure* on the integration.
 
 That's it. Re-pairing later: remove the integration entry, or press *Koppeling verwijderen* in the plugin.
 
@@ -81,6 +85,8 @@ entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 | `sensor.<name>_last_boot`* | timestamp (diagnostic) |
 | `sensor.<name>_fps`, `_frametime`* | averaged over the last second of MangoHud's log; only while a game runs |
 | `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
+| `image.<name>_cover`, `_hero_banner`, `_logo`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
+| `sensor.<name>_artwork_match` | which SteamGridDB game was matched (diagnostic); attributes `sgdb_id`, `overridden`, `error` |
 
 \* disabled by default; enable in the entity settings.
 
@@ -105,6 +111,31 @@ actions:
     target: { entity_id: notify.steam_machine_on_screen_notification }
     data: { title: Washing machine, message: The laundry is done }
 ```
+
+## Actions
+
+`notify.send_message` on the notify entity is the simple form. `steamos.notify` adds a
+duration (1–60 s) and an icon (`home`, `bell`, `info`, `alert`, `check`, `door`, `phone`,
+`message`, `washer`, `car`, `clock`, `sun`):
+
+```yaml
+action: steamos.notify
+target: { entity_id: notify.steam_machine_on_screen_notification }
+data: { title: Doorbell, message: Someone is at the door, duration: 10, icon: door }
+```
+
+`steamos.refresh_artwork` forgets the cached SteamGridDB result for the current game and
+looks it up again.
+
+## Game artwork (optional)
+
+With a SteamGridDB API key the integration looks the running game up **by title** — not by
+appid, because non-Steam shortcuts get random ids — and exposes the best-scored cover
+(600×900), hero banner (1920×620), logo and icon as `image` entities. Results are cached
+for 30 days, so a game costs at most five API calls. When no game runs the last artwork
+stays put and `sensor.<name>_artwork_match` shows `none`, so a dashboard can decide for
+itself whether to keep showing the cover. Titles that match the wrong game can be pinned
+under *Configure* with one `Game title = SteamGridDB game id` per line.
 
 ## FPS via MangoHud
 

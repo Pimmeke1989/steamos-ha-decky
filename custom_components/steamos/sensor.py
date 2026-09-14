@@ -200,6 +200,8 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[SensorEntity] = [SteamOSStatusSensor(coordinator), SteamOSGameSensor(coordinator)]
     entities.extend(SteamOSValueSensor(coordinator, description) for description in SENSORS)
+    if coordinator.artwork is not None:
+        entities.append(SteamOSArtworkMatchSensor(coordinator))
     async_add_entities(entities)
 
 
@@ -253,6 +255,44 @@ class SteamOSGameSensor(SteamOSEntity, SensorEntity):
             "appid": game.get("appid"),
             "shortcut": game.get("shortcut"),
             "started_at": game.get("started_at"),
+        }
+
+
+class SteamOSArtworkMatchSensor(SteamOSEntity, SensorEntity):
+    """Which SteamGridDB game the artwork module matched for the current title."""
+
+    _attr_translation_key = "artwork_match"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:image-search"
+
+    def __init__(self, coordinator: SteamOSCoordinator) -> None:
+        super().__init__(coordinator, "artwork_match")
+        self._artwork = coordinator.artwork
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        assert self._artwork is not None
+        self.async_on_remove(self._artwork.async_add_listener(self.async_write_ha_state))
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> str:
+        assert self._artwork is not None
+        return self._artwork.data.match_name or GAME_NONE
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        assert self._artwork is not None
+        data = self._artwork.data
+        return {
+            "title": data.title,
+            "sgdb_id": data.sgdb_id,
+            "overridden": data.overridden,
+            "error": data.error,
+            "assets": sorted(data.urls),
         }
 
 
