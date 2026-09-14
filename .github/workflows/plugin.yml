@@ -52,6 +52,9 @@ jobs:
             test "v$PKG" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME != version $PKG"; exit 1; }
           fi
 
+      - name: Vendor pure-Python deps (zeroconf, ifaddr)
+        run: bash scripts/vendor-plugin-deps.sh
+
       - name: Package for Decky ("Install from zip")
         run: |
           VERSION=$(python -c "import json;print(json.load(open('plugin/package.json'))['version'])")
