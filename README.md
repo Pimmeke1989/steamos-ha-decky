@@ -11,10 +11,10 @@ Two parts, one repo:
 
 No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
 
-> **Status: milestone 5 of 6.** Working today: discovery, pairing, status, running game,
-> system statistics (temperatures, load, power, fan), FPS via MangoHud, on-screen
-> notifications and optional game artwork via SteamGridDB. Not yet tested on a real
-> Steam Machine — see `docs/design.md` for what to verify.
+> **Status: 0.1.0, feature-complete for the first release** — discovery, pairing, status,
+> running game, system statistics, FPS via MangoHud, on-screen notifications, optional
+> artwork via SteamGridDB and a plugin update check. Not yet tested on a real Steam
+> Machine; `docs/design.md` lists what to verify first.
 
 ## How it works
 
@@ -87,6 +87,7 @@ entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 | `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
 | `image.<name>_cover`, `_hero_banner`, `_logo`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
 | `sensor.<name>_artwork_match` | which SteamGridDB game was matched (diagnostic); attributes `sgdb_id`, `overridden`, `error` |
+| `update.<name>_plugin` | compares the running plugin version with the latest GitHub release (diagnostic; install is manual) |
 
 \* disabled by default; enable in the entity settings.
 
@@ -169,6 +170,18 @@ python -m pytest -q && ruff check .
 Deploy to a Steam Machine for testing: copy the `plugin/` folder (with `dist/`) to
 `~/homebrew/plugins/SteamOS HA/` and reload plugins from Decky's settings, or use the
 zip built by CI. The plugin logs to `~/homebrew/logs/SteamOS HA/`.
+
+### Releasing
+
+1. `python scripts/set-version.py 0.2.0` — writes the version into `plugin/package.json`,
+   `custom_components/steamos/manifest.json` and `steamos_ha/__init__.py`.
+2. Commit, then create the tag `v0.2.0` (GitHub Desktop: *Repository → Create tag*, or
+   `git tag v0.2.0`) and push it. Alternatively create the release with that tag in the
+   GitHub UI — that pushes the tag too.
+3. The *Decky plugin* workflow runs tests, builds the frontend, checks that tag and
+   versions agree, and attaches `SteamOS-HA-v0.2.0.zip` to the GitHub release with
+   generated release notes. HACS picks up the new version from the tag; the `update`
+   entity in Home Assistant shows it.
 
 `scripts/steamos-inventory.sh` prints everything the plugin relies on (hwmon names,
 Decky user, steamos-manager D-Bus, MangoHud paths) — useful when something doesn't show up.

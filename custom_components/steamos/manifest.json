@@ -1,7 +1,9 @@
 {
   "domain": "steamos",
   "name": "SteamOS",
-  "codeowners": ["@Pimmeke1989"],
+  "codeowners": [
+    "@Pimmeke1989"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/Pimmeke1989/steamos-ha-decky",
@@ -10,5 +12,7 @@
   "issue_tracker": "https://github.com/Pimmeke1989/steamos-ha-decky/issues",
   "requirements": [],
   "version": "0.1.0",
-  "zeroconf": ["_steamos-ha._tcp.local."]
+  "zeroconf": [
+    "_steamos-ha._tcp.local."
+  ]
 }

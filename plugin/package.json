@@ -12,7 +12,13 @@
     "type": "git",
     "url": "https://github.com/Pimmeke1989/steamos-ha-decky.git"
   },
-  "keywords": ["decky", "plugin", "steam-deck", "steam-machine", "home-assistant"],
+  "keywords": [
+    "decky",
+    "plugin",
+    "steam-deck",
+    "steam-machine",
+    "home-assistant"
+  ],
   "author": "Pimmeke1989",
   "license": "MIT",
   "devDependencies": {
@@ -30,7 +36,10 @@
   },
   "pnpm": {
     "peerDependencyRules": {
-      "ignoreMissing": ["react", "react-dom"]
+      "ignoreMissing": [
+        "react",
+        "react-dom"
+      ]
     }
   }
 }

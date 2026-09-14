@@ -22,6 +22,7 @@ PLATFORMS: list[Platform] = [
     Platform.IMAGE,
     Platform.NOTIFY,
     Platform.SENSOR,
+    Platform.UPDATE,
 ]
 
 

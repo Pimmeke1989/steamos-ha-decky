@@ -53,11 +53,22 @@ class FakeSteamGridDB:
 
         self.requests: list[str] = []
         self.app = web.Application()
+        self.latest_release: str | None = "v0.2.0"
         self.app.add_routes(
             [
                 web.get("/search/autocomplete/{term}", self.search),
                 web.get("/{kind}/game/{game_id}", self.assets),
+                web.get("/releases/latest", self.releases),  # doubles as the GitHub releases endpoint
             ]
+        )
+
+    async def releases(self, request):
+        from aiohttp import web
+
+        if self.latest_release is None:
+            return web.json_response({"message": "Not Found"}, status=404)
+        return web.json_response(
+            {"tag_name": self.latest_release, "html_url": "https://github.com/x/y/releases/tag/v0.2.0", "body": "Notes"}
         )
 
     async def _auth(self, request):
@@ -101,10 +112,12 @@ class FakeSteamGridDB:
 @pytest.fixture
 async def sgdb(monkeypatch):
     from custom_components.steamos import artwork as artwork_mod
+    from custom_components.steamos import update as update_mod
 
     fake = FakeSteamGridDB()
     async with TestServer(fake.app) as srv:
         monkeypatch.setattr(artwork_mod, "SGDB_BASE_URL", f"http://127.0.0.1:{srv.port}")
+        monkeypatch.setattr(update_mod, "RELEASES_URL", f"http://127.0.0.1:{srv.port}/releases/latest")
         yield fake
 
 
@@ -206,6 +219,11 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     assert entry.runtime_data.artwork.data.urls["grid"] == "https://cdn.example/grids-best.png"
     lookups = [r for r in sgdb.requests if r != "search:portal"]  # "portal" = API-key validation
     assert lookups == ["search:Hades II", "grids:5138", "heroes:5138", "logos:5138", "icons:5138"]
+
+    # update entity: plugin 0.1.0 installed, release v0.2.0 on GitHub → update available
+    upd = hass.states.get("update.steammachine_plugin")
+    assert upd.state == "on"
+    assert upd.attributes["installed_version"] == "0.1.0" and upd.attributes["latest_version"] == "0.2.0"
 
     # refresh action → cache dropped, looked up again
     await hass.services.async_call(DOMAIN, "refresh_artwork", {}, blocking=True)

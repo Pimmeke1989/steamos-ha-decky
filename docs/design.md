@@ -27,7 +27,15 @@ lives as a shared page; this file keeps the decisions that shape the code.
 | M3 | FPS | MangoHud log session on/off, tailer, FPS + frametime sensors. | **done** (needs on-device confirmation of config path / log dir) |
 | M4 | Notifications polish | `steamos.notify` action with duration/icon, 409 behaviour, tests. | **done** |
 | M5 | Artwork module | SteamGridDB client, optional API key in config/options flow, cache, image entities, overrides. | **done** |
-| M6 | Finish | HACS metadata, release zip, README, translations, diagnostics, CI. | |
+| M6 | Finish | HACS metadata, release zip, README, translations, diagnostics, CI, `update` entity, version script. | **done** |
+
+## Deviations from the original design (as built)
+
+- The notify entity is always available (HA silently skips actions on unavailable entities; a clear error is more useful).
+- `sensor.<name>_game` reports the literal `none` when nothing runs, so automations can compare against it.
+- The artwork module keeps the last artwork when the game stops; `sensor.<name>_artwork_match` flips to `none`.
+- FPS uses MangoHud's control queue (send-only) plus its CSV log rather than the frame queue; the config file is patched in place because Steam owns it.
+- An `update` entity (GitHub releases) was added; installing stays manual through Decky.
 
 ## To verify on the device (M0)
 

@@ -144,6 +144,11 @@
       "artwork_icon": {
         "name": "Icon"
       }
+    },
+    "update": {
+      "plugin": {
+        "name": "Plugin"
+      }
     }
   },
   "exceptions": {
