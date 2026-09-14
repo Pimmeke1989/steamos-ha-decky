@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .artwork import ArtworkCoordinator
 from .client import SteamOSClient
-from .const import DOMAIN, STATUS_DISCONNECTED, STATUS_GAMING
+from .const import CONF_MAC, DOMAIN, STATUS_DISCONNECTED, STATUS_GAMING
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ class SteamOSData:
     perf: dict[str, Any] | None = None
     sys: dict[str, Any] = field(default_factory=dict)
     plugin_version: str | None = None
+    mac: str | None = None
     connected: bool = False
 
     @property
@@ -80,7 +81,12 @@ class SteamOSCoordinator(DataUpdateCoordinator[SteamOSData]):
         data = self.data
         if mtype == "hello":
             data.plugin_version = msg.get("plugin")
+            data.mac = msg.get("mac") or None
             data.connected = True
+            if data.mac and self.config_entry.data.get(CONF_MAC) != data.mac:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data={**self.config_entry.data, CONF_MAC: data.mac}
+                )
             return
         if mtype == "state":
             data.connected = True

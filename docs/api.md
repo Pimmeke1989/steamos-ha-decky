@@ -25,19 +25,20 @@ TXT:      id=<first 12 chars of /etc/machine-id>
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `GET` | `/api/info` | no | `{id, name, model, plugin, api, paired, status}` |
+| `GET` | `/api/info` | no | `{id, name, model, plugin, api, paired, status, mac}` (`mac` = address of the interface that serves the API, or null) |
 | `POST` | `/api/pair/start` | no | Ask the plugin to show a 6-digit code on screen. `202 {"expires_in": 300}`; `409 not_in_gaming_mode` when the frontend isn't up. |
 | `POST` | `/api/pair` | no | `{"code": "483921", "client": "Home Assistant"}` → `200 {"token", "id", "name"}`. Errors: `403 wrong_code`, `409 no_pairing_session`, `429 too_many_attempts` (5 tries, 5 minutes). |
 | `DELETE` | `/api/pair` | yes | Revoke the calling token. `204`. |
 | `GET` | `/api/state` | yes | Full state (same shape as the WebSocket `state` message). |
 | `POST` | `/api/notify` | yes | `{"title","message","duration","icon"}` → `204`; `409 not_in_gaming_mode`; `400 empty_notification`. Fields are capped at 200 chars, HTML-escaped; duration clamped to 1–60 s. |
+| `POST` | `/api/power` | yes | `{"action": "suspend" \| "shutdown" \| "reboot"}` → `204`; `400 unknown_action`; `409 not_in_gaming_mode` / `409 frontend_unavailable`. Executed by the frontend via `SteamClient.System.Suspend/Shutdown/RestartPC`. Turning *on* is not an API call: Home Assistant sends a Wake-on-LAN packet to `mac`. |
 | `GET` | `/api/ws` | yes | WebSocket upgrade. `401` (handshake) on a bad token. |
 
 ## WebSocket — server → Home Assistant
 
 ```jsonc
 { "type": "hello", "api": 1, "id": "3f9a1c2e7b04", "name": "steammachine",
-  "model": "Steam Machine", "plugin": "0.1.0" }
+  "model": "Steam Machine", "plugin": "0.1.0", "mac": "50:5a:65:71:dd:4b" }
 
 { "type": "state",                        // full snapshot, right after hello
   "status": "gaming",                     // "gaming" | "disconnected"
@@ -77,11 +78,12 @@ Rules:
 { "type": "ping" }                                   // every 30 s; no pong in 10 s → reconnect
 { "type": "get_state" }                              // ask for a fresh full state
 { "type": "notify", "id": 17, "title": "Wasmachine", "message": "Klaar", "duration": 6 }
+{ "type": "power", "id": 18, "action": "suspend" }   // | "shutdown" | "reboot"
 ```
 
-Every `notify` is answered with a `result` carrying the same `id`. `ok: false`
-comes with `error`: `not_in_gaming_mode`, `frontend_unavailable`,
-`empty_notification`.
+Every `notify` and `power` is answered with a `result` carrying the same `id`.
+`ok: false` comes with `error`: `not_in_gaming_mode`, `frontend_unavailable`,
+`empty_notification`, `unknown_action`.
 
 ## Status semantics
 

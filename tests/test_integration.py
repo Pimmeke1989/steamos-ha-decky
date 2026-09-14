@@ -27,6 +27,7 @@ class FakePlugin:
         self.state = State()
         self.code: str | None = None
         self.toasts: list[dict] = []
+        self.powered: list[str] = []
         self.server = Server(
             self.settings,
             self.state,
@@ -35,6 +36,8 @@ class FakePlugin:
             model="Steam Machine",
             show_code=self._show_code,
             notify=self._notify,
+            power=self._power,
+            mac="50:5a:65:71:dd:4b",
         )
 
     async def _show_code(self, code):
@@ -42,6 +45,10 @@ class FakePlugin:
 
     async def _notify(self, payload):
         self.toasts.append(payload)
+        return True
+
+    async def _power(self, action):
+        self.powered.append(action)
         return True
 
 
@@ -142,7 +149,9 @@ async def _wait_for(hass: HomeAssistant, entity_id: str, state: str, timeout: fl
     raise AssertionError(f"{entity_id} never became {state!r}; is {hass.states.get(entity_id)}")
 
 
-async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePlugin, sgdb: FakeSteamGridDB) -> None:
+async def test_zeroconf_pairing_and_entities(
+    hass: HomeAssistant, plugin: FakePlugin, sgdb: FakeSteamGridDB, monkeypatch
+) -> None:
     info = ZeroconfServiceInfo(
         ip_address=ip_address(plugin.host),
         ip_addresses=[ip_address(plugin.host)],
@@ -220,6 +229,21 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     lookups = [r for r in sgdb.requests if r != "search:portal"]  # "portal" = API-key validation
     assert lookups == ["search:Hades II", "grids:5138", "icons:5138"]
 
+    # power buttons: sleep goes to the plugin, turn on sends a magic packet to the paired MAC
+    assert entry.data["mac"] == "50:5a:65:71:dd:4b"
+    await hass.services.async_call(
+        "button", "press", {"entity_id": "button.steammachine_sleep"}, blocking=True
+    )
+    assert plugin.powered == ["suspend"]
+    sent: list[tuple] = []
+    monkeypatch.setattr(
+        "custom_components.steamos.button.send_magic_packet", lambda mac, ip_address: sent.append((mac, ip_address))
+    )
+    await hass.services.async_call(
+        "button", "press", {"entity_id": "button.steammachine_turn_on"}, blocking=True
+    )
+    assert sent == [("50:5a:65:71:dd:4b", "255.255.255.255")]
+
     # update entity: plugin 0.1.0 installed, release v0.2.0 on GitHub → update available
     upd = hass.states.get("update.steammachine_plugin")
     assert upd.state == "on"
@@ -252,6 +276,8 @@ async def test_zeroconf_pairing_and_entities(hass: HomeAssistant, plugin: FakePl
     await _wait_for(hass, "sensor.steammachine_status", STATUS_DISCONNECTED)
     assert hass.states.get("sensor.steammachine_cpu_temperature").state == "unavailable"
     assert hass.states.get("sensor.steammachine_game").state == "unavailable"
+    assert hass.states.get("button.steammachine_sleep").state == "unavailable"
+    assert hass.states.get("button.steammachine_turn_on").state != "unavailable"  # the point of turn on
     await _wait_for(hass, "sensor.steammachine_artwork_match", "none")  # no game → no match, art stays
     assert hass.states.get("image.steammachine_cover").state not in ("unknown", "unavailable")
     with pytest.raises(Exception, match="Gaming Mode"):

@@ -143,6 +143,20 @@
       "plugin": {
         "name": "Plugin"
       }
+    },
+    "button": {
+      "sleep": {
+        "name": "Slaapstand"
+      },
+      "shutdown": {
+        "name": "Afsluiten"
+      },
+      "reboot": {
+        "name": "Herstarten"
+      },
+      "turn_on": {
+        "name": "Aanzetten"
+      }
     }
   },
   "exceptions": {
@@ -151,16 +165,23 @@
     },
     "notify_failed": {
       "message": "De melding kon niet worden verstuurd: {error}"
+    },
+    "power_failed": {
+      "message": "De power-actie kon niet worden verstuurd: {error}"
+    },
+    "no_mac": {
+      "message": "Er is nog geen MAC-adres bekend van deze Steam Machine; koppel opnieuw terwijl hij in Gaming Mode staat."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "SteamOS-opties",
-        "description": "Artwork via SteamGridDB. Een lege API-key schakelt de artwork-entiteiten uit. Overrides: één per regel, `Gametitel = SteamGridDB-game-id`, voor titels die op de verkeerde game matchen.",
+        "description": "Artwork via SteamGridDB: een lege API-key schakelt de artwork-entiteiten uit; overrides zijn één per regel, `Gametitel = SteamGridDB-game-id`. Het Wake-on-LAN-broadcastadres hoeft alleen aangepast te worden als Home Assistant op een ander subnet zit dan de Steam Machine (bijv. 192.168.1.255).",
         "data": {
           "api_key": "SteamGridDB-API-key",
-          "artwork_overrides": "Titel-overrides"
+          "artwork_overrides": "Titel-overrides",
+          "wol_broadcast": "Wake-on-LAN-broadcastadres"
         }
       }
     },

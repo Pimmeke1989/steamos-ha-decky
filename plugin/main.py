@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+import subprocess
 from typing import Any
 
 import decky  # provided by Decky Loader
@@ -53,6 +54,8 @@ class Plugin:
             model=self.model,
             show_code=self._show_pairing_code,
             notify=self._notify_frontend,
+            power=self._power_frontend,
+            mac=_local_mac(),
         )
         self.discovery = Discovery(self.settings.port, self.machine_id, self.hostname, self.model)
 
@@ -129,6 +132,7 @@ class Plugin:
             "perf": self.state.perf,
             "hostname": self.hostname,
             "ip": _local_ip(),
+            "mac": self.server.mac,
             "machine_id": self.machine_id,
             "fps": {
                 "enabled": bool(self.settings.fps.get("enabled", True)),
@@ -173,6 +177,14 @@ class Plugin:
         if self.state.status != STATUS_GAMING:
             return False
         await decky.emit("notify", payload)
+        return True
+
+    async def _power_frontend(self, action: str) -> bool:
+        """suspend / shutdown / reboot through the Steam client (SteamClient.System.*)."""
+        if self.state.status != STATUS_GAMING:
+            return False
+        log.info("Power action: %s", action)
+        await decky.emit("power", action)
         return True
 
     # ---------------------------------------------------------------- internals
@@ -238,6 +250,27 @@ def _local_ip() -> str | None:
             return sock.getsockname()[0]
     except OSError:
         return None
+
+
+def _local_mac() -> str | None:
+    """MAC of the interface that carries the local IP (for Wake-on-LAN from Home Assistant)."""
+    ip = _local_ip()
+    if not ip:
+        return None
+    try:
+        out = subprocess.run(["ip", "-o", "-4", "addr"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[3].split("/")[0] == ip:
+            try:
+                with open(f"/sys/class/net/{parts[1]}/address", encoding="utf-8") as fh:
+                    mac = fh.read().strip()
+                    return mac if mac and mac != "00:00:00:00:00:00" else None
+            except OSError:
+                return None
+    return None
 
 
 def _event(name: str, game: dict[str, Any], ts: str) -> dict[str, Any]:

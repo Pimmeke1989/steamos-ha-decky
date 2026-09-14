@@ -21,6 +21,7 @@ export interface PluginStatus {
   perf: { fps: number | null; frametime_ms: number | null; focus: string | null } | null;
   hostname: string;
   ip: string | null;
+  mac: string | null;
   machine_id: string;
   fps: {
     enabled: boolean;

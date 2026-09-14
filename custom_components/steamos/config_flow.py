@@ -33,10 +33,13 @@ from .const import (
     CLIENT_NAME,
     CONF_API_KEY,
     CONF_ARTWORK_OVERRIDES,
+    CONF_MAC,
     CONF_MACHINE_ID,
     CONF_MODEL,
     CONF_TOKEN,
+    CONF_WOL_BROADCAST,
     DEFAULT_PORT,
+    DEFAULT_WOL_BROADCAST,
     DOMAIN,
 )
 
@@ -207,6 +210,7 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_TOKEN: self._token,
                         CONF_MACHINE_ID: self._info.machine_id,
                         CONF_MODEL: self._info.model,
+                        CONF_MAC: self._info.mac,
                     },
                     options={CONF_API_KEY: api_key} if api_key else {},
                 )
@@ -226,8 +230,11 @@ class SteamOSOptionsFlow(OptionsFlow):
         if user_input is not None:
             api_key = (user_input.get(CONF_API_KEY) or "").strip()
             overrides = (user_input.get(CONF_ARTWORK_OVERRIDES) or "").strip()
+            broadcast = (user_input.get(CONF_WOL_BROADCAST) or DEFAULT_WOL_BROADCAST).strip()
             if not api_key or await _validate_api_key(self.hass, api_key, errors):
-                return self.async_create_entry(data={CONF_API_KEY: api_key, CONF_ARTWORK_OVERRIDES: overrides})
+                return self.async_create_entry(
+                    data={CONF_API_KEY: api_key, CONF_ARTWORK_OVERRIDES: overrides, CONF_WOL_BROADCAST: broadcast}
+                )
         options = self.config_entry.options
         schema = vol.Schema(
             {
@@ -237,6 +244,7 @@ class SteamOSOptionsFlow(OptionsFlow):
                 vol.Optional(CONF_ARTWORK_OVERRIDES, default=options.get(CONF_ARTWORK_OVERRIDES, "")): TextSelector(
                     TextSelectorConfig(multiline=True)
                 ),
+                vol.Optional(CONF_WOL_BROADCAST, default=options.get(CONF_WOL_BROADCAST, DEFAULT_WOL_BROADCAST)): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

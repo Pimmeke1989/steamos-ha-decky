@@ -56,6 +56,7 @@ class DeviceInfo:
     plugin_version: str
     api: int
     paired: bool
+    mac: str | None = None
 
 
 class SteamOSClient:
@@ -110,6 +111,7 @@ class SteamOSClient:
             plugin_version=str(data.get("plugin", "?")),
             api=int(data.get("api", 1)),
             paired=bool(data.get("paired", False)),
+            mac=data.get("mac") or None,
         )
         if info.api > SUPPORTED_API:
             raise UnsupportedApi(f"plugin API {info.api} > supported {SUPPORTED_API}")
@@ -146,6 +148,13 @@ class SteamOSClient:
             raise NotInGamingMode
         if resp.status >= 400:
             raise SteamOSError(f"notify failed: http {resp.status}")
+
+    async def power_http(self, action: str) -> None:
+        resp = await self._request("POST", "/api/power", json={"action": action})
+        if resp.status == 409:
+            raise NotInGamingMode
+        if resp.status >= 400:
+            raise SteamOSError(f"power action failed: http {resp.status}")
 
     # -------------------------------------------------------------- WebSocket
 
@@ -209,16 +218,23 @@ class SteamOSClient:
 
     async def send_notify(self, payload: dict[str, Any]) -> None:
         """Send a notification over the WebSocket, falling back to HTTP."""
+        await self._command("notify", payload, self.notify_http, payload)
+
+    async def send_power(self, action: str) -> None:
+        """suspend / shutdown / reboot over the WebSocket, falling back to HTTP."""
+        await self._command("power", {"action": action}, self.power_http, action)
+
+    async def _command(self, msg_type: str, payload: dict[str, Any], http_fallback, *fallback_args: Any) -> None:
         ws = self._ws
         if ws is None or ws.closed:
-            await self.notify_http(payload)
+            await http_fallback(*fallback_args)
             return
         self._msg_id += 1
         msg_id = self._msg_id
         fut: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[msg_id] = fut
         try:
-            await ws.send_json({"type": "notify", "id": msg_id, **payload})
+            await ws.send_json({"type": msg_type, "id": msg_id, **payload})
             result = await asyncio.wait_for(fut, 10)
         except (TimeoutError, aiohttp.ClientError) as err:
             self._pending.pop(msg_id, None)
@@ -227,7 +243,7 @@ class SteamOSClient:
             error = result.get("error") or "unknown"
             if error == "not_in_gaming_mode":
                 raise NotInGamingMode
-            raise SteamOSError(f"notify failed: {error}")
+            raise SteamOSError(f"{msg_type} failed: {error}")
 
     def _resolve(self, data: dict[str, Any]) -> None:
         fut = self._pending.pop(data.get("id"), None)  # type: ignore[arg-type]

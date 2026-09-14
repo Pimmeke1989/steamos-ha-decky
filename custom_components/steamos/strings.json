@@ -143,6 +143,20 @@
       "plugin": {
         "name": "Plugin"
       }
+    },
+    "button": {
+      "sleep": {
+        "name": "Sleep"
+      },
+      "shutdown": {
+        "name": "Shut down"
+      },
+      "reboot": {
+        "name": "Restart"
+      },
+      "turn_on": {
+        "name": "Turn on"
+      }
     }
   },
   "exceptions": {
@@ -151,16 +165,23 @@
     },
     "notify_failed": {
       "message": "The notification could not be sent: {error}"
+    },
+    "power_failed": {
+      "message": "The power action could not be sent: {error}"
+    },
+    "no_mac": {
+      "message": "No MAC address known for this Steam Machine yet; pair again while it is in Gaming Mode."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "SteamOS options",
-        "description": "Artwork via SteamGridDB. An empty API key turns the artwork entities off. Overrides: one per line, `Game title = SteamGridDB game id`, for titles that match the wrong game.",
+        "description": "Artwork via SteamGridDB: an empty API key turns the artwork entities off; overrides are one per line, `Game title = SteamGridDB game id`. The Wake-on-LAN broadcast address only needs changing when Home Assistant is on a different subnet than the Steam Machine (e.g. 192.168.1.255).",
         "data": {
           "api_key": "SteamGridDB API key",
-          "artwork_overrides": "Title overrides"
+          "artwork_overrides": "Title overrides",
+          "wol_broadcast": "Wake-on-LAN broadcast address"
         }
       }
     },

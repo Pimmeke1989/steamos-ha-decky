@@ -10,7 +10,9 @@
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/Pimmeke1989/steamos-ha-decky/issues",
-  "requirements": [],
+  "requirements": [
+    "wakeonlan==3.1.0"
+  ],
   "version": "0.1.0",
   "zeroconf": [
     "_steamos-ha._tcp.local."

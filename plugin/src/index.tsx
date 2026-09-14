@@ -185,7 +185,11 @@ const Content: FC = () => {
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
-          <Field label="Address" description={status.hostname} focusable>
+          <Field
+            label="Address"
+            description={status.mac ? `${status.hostname} · MAC ${status.mac}` : status.hostname}
+            focusable
+          >
             {status.ip ?? status.hostname}:{status.port}
           </Field>
         </PanelSectionRow>
@@ -254,8 +258,18 @@ export default definePlugin(() => {
       });
     }
   };
+  const onPower = (action: string) => {
+    try {
+      if (action === "suspend") SteamClient.System.Suspend();
+      else if (action === "shutdown") SteamClient.System.Shutdown();
+      else if (action === "reboot") SteamClient.System.RestartPC();
+    } catch (err) {
+      console.error("[steamos-ha] power action failed", action, err);
+    }
+  };
   addEventListener<[NotifyPayload]>("notify", onNotify);
   addEventListener<[string | null]>("pairing_code", onPairingCode);
+  addEventListener<[string]>("power", onPower);
 
   return {
     name: "SteamOS HA",
@@ -267,6 +281,7 @@ export default definePlugin(() => {
       lifetimeHook?.unregister();
       removeEventListener("notify", onNotify);
       removeEventListener("pairing_code", onPairingCode);
+      removeEventListener("power", onPower);
     },
   };
 });

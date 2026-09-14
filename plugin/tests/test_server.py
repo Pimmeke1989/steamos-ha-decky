@@ -23,6 +23,7 @@ class Harness:
         self.state = State()
         self.codes: list[str | None] = []
         self.notified: list[dict] = []
+        self.powered: list[str] = []
         self.server = Server(
             self.settings,
             self.state,
@@ -31,6 +32,8 @@ class Harness:
             model="Steam Machine",
             show_code=self._show_code,
             notify=self._notify,
+            power=self._power,
+            mac="50:5a:65:71:dd:4b",
         )
 
     async def _show_code(self, code):
@@ -38,6 +41,10 @@ class Harness:
 
     async def _notify(self, payload):
         self.notified.append(payload)
+        return True
+
+    async def _power(self, action):
+        self.powered.append(action)
         return True
 
 
@@ -153,6 +160,27 @@ async def test_updates_are_coalesced(harness: Harness):
             await asyncio.wait_for(ws.receive_json(), 0.3)
 
 
+async def test_power_http_and_ws(harness: Harness):
+    token = await pair(harness)
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = await harness.client.post("/api/power", json={"action": "format_disk"}, headers=headers)
+    assert resp.status == 400
+    resp = await harness.client.post("/api/power", json={"action": "suspend"}, headers=headers)
+    assert resp.status == 204 and harness.powered == ["suspend"]
+    info = await (await harness.client.get("/api/info")).json()
+    assert info["mac"] == "50:5a:65:71:dd:4b"
+    async with harness.client.ws_connect("/api/ws", headers=headers) as ws:
+        hello = await ws.receive_json()
+        assert hello["mac"] == "50:5a:65:71:dd:4b"
+        await ws.receive_json()  # state
+        await ws.send_json({"type": "power", "id": 3, "action": "shutdown"})
+        assert (await ws.receive_json()) == {"type": "result", "id": 3, "ok": True, "error": None}
+        assert harness.powered == ["suspend", "shutdown"]
+    harness.state.set_status(STATUS_DISCONNECTED)
+    resp = await harness.client.post("/api/power", json={"action": "suspend"}, headers=headers)
+    assert resp.status == 409
+
+
 async def test_notify_http_requires_gaming(harness: Harness):
     token = await pair(harness)
     harness.state.set_status(STATUS_DISCONNECTED)
@@ -187,6 +215,8 @@ async def test_plugin_heartbeat_transitions(tmp_path, monkeypatch):
     from steamos_ha import gamescope
 
     monkeypatch.setattr(gamescope, "find_stats_pipe", lambda *a, **k: None)  # no gamescope here
+    monkeypatch.setattr(plugin_main, "_local_ip", lambda: "10.0.0.5")  # no network probing in tests
+    monkeypatch.setattr(plugin_main, "_local_mac", lambda: "50:5a:65:71:dd:4b")
 
     plugin = plugin_main.Plugin()
     # use an ephemeral port to avoid clashes

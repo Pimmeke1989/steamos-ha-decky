@@ -14,7 +14,7 @@ lives as a shared page; this file keeps the decisions that shape the code.
 | FPS | Read gamescope's stats pipe (`-T …/stats.pipe`, unread on modern SteamOS): `fps=` lines a few times per second. MangoHud's log turned out to report mangoapp's own redraw rate; the mangoapp message queue is drained instantly (even `MSG_COPY` never sees a message). |
 | System stats | sysfs/procfs read by name (`k10temp`, `amdgpu`, `nvme`, `steamdeck_hwmon`), the way Valve's Inkterface does. No `psutil`. |
 | Artwork | Optional module inside the same integration, SteamGridDB looked up **by title** (non-Steam shortcuts have meaningless appids). No API key → no artwork entities, no external calls. |
-| Controls in v1 | Notifications only (toast via Decky's toaster). Power, TDP, mode switching etc. later via `steamos-manager` D-Bus. |
+| Controls in v1 | Notifications (toast via Decky's toaster) and power: sleep / shut down / restart through the frontend's `SteamClient.System`, turn on via Wake-on-LAN from Home Assistant (MAC reported by the plugin). TDP, mode switching etc. later via `steamos-manager` D-Bus. |
 | Repo | One repo. HACS reads `custom_components/`; the plugin is packaged from `plugin/` as a release zip. |
 
 ## Milestones
@@ -36,6 +36,8 @@ lives as a shared page; this file keeps the decisions that shape the code.
 - The artwork module keeps the last artwork when the game stops; `sensor.<name>_artwork_match` flips to `none`.
 - FPS comes from gamescope's `stats.pipe`. MangoHud logging was built first and removed again after on-device testing: mangoapp logs its own overlay redraw rate (multiples of the display period), not the game's frame rate; `MSG_COPY` on the mangoapp queue never sees a message because mangoapp drains it instantly.
 - An `update` entity (GitHub releases) was added; installing stays manual through Decky.
+- Power controls were pulled forward from "later": `POST /api/power` / WS `power` route `suspend`, `shutdown` and `reboot` to the frontend (`SteamClient.System.Suspend/Shutdown/RestartPC`) instead of going through `steamos-manager`, so no D-Bus/polkit work on the plugin side. Turning on is Wake-on-LAN from Home Assistant (`wakeonlan`); the plugin exposes its MAC in `/api/info` and `hello`, the integration stores it in the config entry and refreshes it on every reconnect.
+- Artwork was narrowed to cover (grid) and icon; hero banner and logo were dropped.
 
 ## Verified on a Steam Deck (SteamOS 3.8.16, Decky Loader 3.2.6) — 2026-09-14
 

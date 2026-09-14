@@ -12,6 +12,9 @@ SUPPORTED_API: Final = 1
 CONF_TOKEN: Final = "token"
 CONF_MACHINE_ID: Final = "machine_id"
 CONF_MODEL: Final = "model"
+CONF_MAC: Final = "mac"
+CONF_WOL_BROADCAST: Final = "wol_broadcast"
+DEFAULT_WOL_BROADCAST: Final = "255.255.255.255"
 
 STATUS_GAMING: Final = "gaming"
 STATUS_DISCONNECTED: Final = "disconnected"

@@ -85,6 +85,8 @@ entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 | `sensor.<name>_last_boot`* | timestamp (diagnostic) |
 | `sensor.<name>_fps`, `_frametime`* | from gamescope's stats pipe, averaged over the last second; only while a game runs |
 | `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
+| `button.<name>_sleep`, `_shut_down`, `_restart`* | suspend / power off / reboot through the Steam UI (`SteamClient.System`); only in Gaming Mode |
+| `button.<name>_turn_on` | sends a Wake-on-LAN magic packet to the MAC learned at pairing; always available once a MAC is known |
 | `image.<name>_cover`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
 | `sensor.<name>_artwork_match` | which SteamGridDB game was matched (diagnostic); attributes `sgdb_id`, `overridden`, `error` |
 | `update.<name>_plugin` | compares the running plugin version with the latest GitHub release (diagnostic; install is manual) |
@@ -127,6 +129,23 @@ data: { title: Doorbell, message: Someone is at the door, duration: 10, icon: do
 
 `steamos.refresh_artwork` forgets the cached SteamGridDB result for the current game and
 looks it up again.
+
+## Power buttons and Wake-on-LAN
+
+*Sleep*, *Shut down* and *Restart* ask the plugin's frontend to call the same functions
+the Steam UI's power menu uses, so they behave exactly like picking those from the menu.
+They are unavailable outside Gaming Mode (there is no frontend to ask).
+
+*Turn on* is built into the integration: the plugin reports its MAC address at pairing
+(and on every reconnect), and the button sends a Wake-on-LAN magic packet — no separate
+`wake_on_lan` YAML needed. Two caveats:
+
+- Wake-on-LAN needs a wired connection in practice. A Steam Machine on Ethernet wakes
+  from sleep and (with WoL enabled in the firmware) from power-off; a Steam Deck on Wi-Fi
+  generally does not.
+- The packet is broadcast to `255.255.255.255`. If Home Assistant sits on another subnet
+  or in a Docker network, set the subnet broadcast (e.g. `192.168.1.255`) under
+  *Configure*.
 
 ## Game artwork (optional)
 

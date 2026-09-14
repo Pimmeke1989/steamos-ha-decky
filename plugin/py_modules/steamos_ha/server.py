@@ -8,6 +8,7 @@ Routes (see docs/api.md):
     DELETE /api/pair          auth     revoke the calling token
     GET    /api/state         auth
     POST   /api/notify        auth     {"title","message","duration","icon"}
+    POST   /api/power         auth     {"action": "suspend" | "shutdown" | "reboot"}
     GET    /api/ws            auth     WebSocket
 
 The server itself knows nothing about Decky: it gets callbacks for the things
@@ -40,6 +41,8 @@ WS_SEND_MIN_INTERVAL_S = 1.0
 
 ShowCodeCb = Callable[[str | None], Awaitable[None]]
 NotifyCb = Callable[[dict[str, Any]], Awaitable[bool]]
+PowerCb = Callable[[str], Awaitable[bool]]
+POWER_ACTIONS = ("suspend", "shutdown", "reboot")
 
 
 class PairingSession:
@@ -68,6 +71,8 @@ class Server:
         model: str,
         show_code: ShowCodeCb,
         notify: NotifyCb,
+        power: PowerCb,
+        mac: str | None = None,
     ) -> None:
         self.settings = settings
         self.state = state
@@ -76,6 +81,8 @@ class Server:
         self.model = model
         self._show_code = show_code
         self._notify = notify
+        self._power = power
+        self.mac = mac
 
         self.pairing: PairingSession | None = None
         self._clients: set[web.WebSocketResponse] = set()
@@ -94,6 +101,7 @@ class Server:
                 web.delete("/api/pair", self.handle_unpair),
                 web.get("/api/state", self.handle_state),
                 web.post("/api/notify", self.handle_notify),
+                web.post("/api/power", self.handle_power),
                 web.get("/api/ws", self.handle_ws),
             ]
         )
@@ -152,6 +160,7 @@ class Server:
                 "api": API_VERSION,
                 "paired": self.settings.paired,
                 "status": self.state.status,
+                "mac": self.mac,
             }
         )
 
@@ -212,6 +221,19 @@ class Server:
             return web.json_response({"error": "frontend_unavailable"}, status=409)
         return web.Response(status=204)
 
+    async def handle_power(self, request: web.Request) -> web.Response:
+        body = await _json_body(request)
+        action = str(body.get("action", ""))
+        if action not in POWER_ACTIONS:
+            return web.json_response({"error": "unknown_action"}, status=400)
+        if self.state.status != STATUS_GAMING:
+            return web.json_response({"error": "not_in_gaming_mode"}, status=409)
+        ok = await self._power(action)
+        if not ok:
+            return web.json_response({"error": "frontend_unavailable"}, status=409)
+        log.info("Power action %s requested by %s", action, request.remote)
+        return web.Response(status=204)
+
     async def handle_ws(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=30, autoping=True)
         await ws.prepare(request)
@@ -227,6 +249,7 @@ class Server:
                     "name": self.hostname,
                     "model": self.model,
                     "plugin": PLUGIN_VERSION,
+                    "mac": self.mac,
                 }
             )
             await ws.send_json(self.state.snapshot())
@@ -261,6 +284,20 @@ class Server:
                 )
                 return
             ok = await self._notify(payload)
+            await ws.send_json(
+                {"type": "result", "id": msg_id, "ok": ok, "error": None if ok else "frontend_unavailable"}
+            )
+        elif mtype == "power":
+            msg_id = msg.get("id")
+            action = str(msg.get("action", ""))
+            if action not in POWER_ACTIONS:
+                await ws.send_json({"type": "result", "id": msg_id, "ok": False, "error": "unknown_action"})
+                return
+            if self.state.status != STATUS_GAMING:
+                await ws.send_json({"type": "result", "id": msg_id, "ok": False, "error": "not_in_gaming_mode"})
+                return
+            ok = await self._power(action)
+            log.info("Power action %s via WebSocket: %s", action, "ok" if ok else "frontend unavailable")
             await ws.send_json(
                 {"type": "result", "id": msg_id, "ok": ok, "error": None if ok else "frontend_unavailable"}
             )
