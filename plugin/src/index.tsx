@@ -139,6 +139,23 @@ const Content: FC = () => {
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
+          <Field
+            label="FPS"
+            description={
+              status.mangohud.last_error
+                ? `MangoHud: ${status.mangohud.last_error}`
+                : status.mangohud.active
+                  ? "via MangoHud-log"
+                  : status.mangohud.enabled
+                    ? "start bij volgende game"
+                    : "uitgeschakeld"
+            }
+            focusable
+          >
+            {status.perf?.fps != null ? Math.round(status.perf.fps) : "—"}
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
           <Field label="Adres" focusable>
             {status.hostname}:{status.port}
           </Field>

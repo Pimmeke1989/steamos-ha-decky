@@ -184,6 +184,9 @@ async def test_plugin_heartbeat_transitions(tmp_path, monkeypatch):
         self.backend = "none"
 
     monkeypatch.setattr(discovery.Discovery, "start", _no_discovery)
+    from steamos_ha import mangohud
+
+    monkeypatch.setattr(mangohud._CtrlQueue, "send", lambda self, **kw: True)  # never touch a real mangoapp
 
     plugin = plugin_main.Plugin()
     # use an ephemeral port to avoid clashes

@@ -11,9 +11,9 @@ Two parts, one repo:
 
 No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
 
-> **Status: milestone 2.** Working today: discovery, pairing, status, running game, system
-> statistics (temperatures, load, power, fan) and on-screen notifications. FPS via MangoHud
-> (milestone 3) and artwork (milestone 5) follow — see `docs/design.md`.
+> **Status: milestone 3.** Working today: discovery, pairing, status, running game, system
+> statistics (temperatures, load, power, fan), FPS via MangoHud and on-screen notifications.
+> Artwork via SteamGridDB (milestone 5) follows — see `docs/design.md`.
 
 ## How it works
 
@@ -79,7 +79,7 @@ entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
 | `sensor.<name>_gpu_power` | W |
 | `sensor.<name>_fan_speed` | rpm |
 | `sensor.<name>_last_boot`* | timestamp (diagnostic) |
-| `sensor.<name>_fps`, `_frametime`* | from MangoHud — milestone 3, unavailable until then |
+| `sensor.<name>_fps`, `_frametime`* | averaged over the last second of MangoHud's log; only while a game runs |
 | `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
 
 \* disabled by default; enable in the entity settings.
@@ -105,6 +105,24 @@ actions:
     target: { entity_id: notify.steam_machine_on_screen_notification }
     data: { title: Washing machine, message: The laundry is done }
 ```
+
+## FPS via MangoHud
+
+Gaming Mode already runs MangoHud's `mangoapp` for the performance overlay. When a game
+starts, the plugin
+
+1. finds the config file `mangoapp` uses (`MANGOHUD_CONFIGFILE` of the running process,
+   else `~/.config/MangoHud/MangoHud.conf`), and makes sure it contains
+   `output_folder=<log dir>` and `log_interval=250`;
+2. asks `mangoapp` to reload its config and start a log session (a control message on
+   MangoHud's own message queue — send-only, so the overlay keeps every frame);
+3. tails the newest CSV in the log dir once a second and averages `fps` / `frametime`.
+
+When the game stops the session is stopped and the CSV deleted. Log dir default:
+`~/.local/share/steamos-ha/mangohud`. If anything in this chain fails, the FPS line in the
+plugin panel shows what went wrong and the sensors stay unavailable; the other sensors are
+not affected. `enabled`, `log_dir`, `config_path` and `log_interval_ms` live under
+`mangohud` in `~/homebrew/settings/SteamOS HA/settings.json`.
 
 ## Development
 

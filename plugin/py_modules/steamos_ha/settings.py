@@ -7,7 +7,7 @@ Stored shape::
       "clients": [
         {"token_sha256": "...", "name": "Home Assistant (woonkamer)", "created": "2026-09-14T20:00:00+02:00"}
       ],
-      "mangohud": {"enabled": true, "log_dir": "", "log_interval_ms": 250}
+      "mangohud": {"enabled": true, "log_dir": "", "config_path": "", "log_interval_ms": 250}
     }
 """
 
@@ -26,7 +26,7 @@ from . import DEFAULT_PORT
 _DEFAULTS: dict[str, Any] = {
     "port": DEFAULT_PORT,
     "clients": [],
-    "mangohud": {"enabled": True, "log_dir": "", "log_interval_ms": 250},
+    "mangohud": {"enabled": True, "log_dir": "", "config_path": "", "log_interval_ms": 250},
 }
 
 
