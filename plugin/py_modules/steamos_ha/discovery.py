@@ -77,13 +77,21 @@ class Discovery:
         try:
             txt = {k: v.encode() for k, v in _txt_records(self.machine_id, self.hostname, self.model).items()}
             name = f"{self.hostname}.{SERVICE_TYPE}"
+            addresses = local_ipv4_addresses()
+            if not addresses:
+                log.warning("No IPv4 address found to advertise; Home Assistant may have to be configured manually")
             self._info = ServiceInfo(
                 SERVICE_TYPE,
                 name,
+                # Advertise our IPv4 addresses explicitly. Without A records Home Assistant
+                # resolves <hostname>.local. itself and may end up with an IPv6 address the
+                # server does not listen on.
+                addresses=[socket.inet_aton(ip) for ip in addresses],
                 port=self.port,
                 properties=txt,
                 server=f"{self.hostname}.local.",
             )
+            log.info("Advertising %s on %s port %s", name, ", ".join(addresses) or "?", self.port)
             loop = asyncio.get_running_loop()
             self._zc = await loop.run_in_executor(None, lambda: Zeroconf(ip_version=IPVersion.V4Only))
             await loop.run_in_executor(None, self._zc.register_service, self._info)
@@ -116,6 +124,27 @@ class Discovery:
             self._proc = None
             return False
         return True
+
+
+def local_ipv4_addresses() -> list[str]:
+    """Non-loopback IPv4 addresses of this machine, the routed one first."""
+    found: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("10.255.255.255", 1))
+            found.append(sock.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        import ifaddr  # type: ignore  # vendored next to zeroconf
+
+        for adapter in ifaddr.get_adapters():
+            for ip in adapter.ips:
+                if isinstance(ip.ip, str) and not ip.ip.startswith(("127.", "169.254.")) and ip.ip not in found:
+                    found.append(ip.ip)
+    except Exception:  # noqa: BLE001
+        pass
+    return found
 
 
 def read_machine_id() -> str:

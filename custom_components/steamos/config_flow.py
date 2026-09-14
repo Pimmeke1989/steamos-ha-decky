@@ -8,6 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import (
+    SOURCE_USER,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -58,6 +59,17 @@ STEP_ARTWORK_SCHEMA = vol.Schema(
 )
 
 
+def _pick_host(info: ZeroconfServiceInfo) -> str:
+    """Prefer a routable IPv4 address; the plugin's server listens on IPv4."""
+    for addr in info.ip_addresses:
+        if addr.version == 4 and not addr.is_link_local:
+            return str(addr)
+    for addr in info.ip_addresses:
+        if not addr.is_link_local:
+            return str(addr)
+    return info.host
+
+
 async def _validate_api_key(hass, api_key: str, errors: dict[str, str]) -> bool:
     client = SteamGridDBClient(async_get_clientsession(hass), api_key, artwork_mod.SGDB_BASE_URL)
     try:
@@ -92,7 +104,7 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
         machine_id = discovery_info.properties.get("id")
         if not machine_id:
             return self.async_abort(reason="no_id")
-        self._host = discovery_info.host
+        self._host = _pick_host(discovery_info)
         self._port = discovery_info.port or DEFAULT_PORT
         await self.async_set_unique_id(machine_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._host, CONF_PORT: self._port})
@@ -145,7 +157,9 @@ class SteamOSConfigFlow(ConfigFlow, domain=DOMAIN):
         except UnsupportedApi:
             return self.async_abort(reason="unsupported_api")
 
-        await self.async_set_unique_id(self._info.machine_id)
+        # A manual add may take over from a discovery flow that is stuck on an
+        # unreachable address; the discovery flow is aborted once this one finishes.
+        await self.async_set_unique_id(self._info.machine_id, raise_on_progress=self.source != SOURCE_USER)
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._host, CONF_PORT: self._port})
         self.context["title_placeholders"] = {"name": self._info.name, "model": self._info.model}
         return await self.async_step_pair()

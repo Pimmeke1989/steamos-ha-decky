@@ -14,6 +14,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+from steamos_ha import PLUGIN_VERSION
 from steamos_ha.server import Server
 from steamos_ha.settings import Settings
 from steamos_ha.state import STATUS_DISCONNECTED, STATUS_GAMING, State
@@ -52,6 +53,14 @@ class FakePlugin:
         return True
 
 
+def _bump_patch(version: str) -> str:
+    major, minor, patch = version.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
+
+
+NEWER_VERSION = "v" + _bump_patch(PLUGIN_VERSION)
+
+
 class FakeSteamGridDB:
     """Minimal SteamGridDB v2 stand-in: one known game, one asset per type."""
 
@@ -60,7 +69,8 @@ class FakeSteamGridDB:
 
         self.requests: list[str] = []
         self.app = web.Application()
-        self.latest_release: str | None = "v0.2.0"
+        # Always one patch release ahead of the plugin under test, whatever its version is.
+        self.latest_release: str | None = NEWER_VERSION
         self.app.add_routes(
             [
                 web.get("/search/autocomplete/{term}", self.search),
@@ -75,7 +85,11 @@ class FakeSteamGridDB:
         if self.latest_release is None:
             return web.json_response({"message": "Not Found"}, status=404)
         return web.json_response(
-            {"tag_name": self.latest_release, "html_url": "https://github.com/x/y/releases/tag/v0.2.0", "body": "Notes"}
+            {
+                "tag_name": self.latest_release,
+                "html_url": f"https://github.com/x/y/releases/tag/{self.latest_release}",
+                "body": "Notes",
+            }
         )
 
     async def _auth(self, request):
@@ -231,23 +245,20 @@ async def test_zeroconf_pairing_and_entities(
 
     # power buttons: sleep goes to the plugin, turn on sends a magic packet to the paired MAC
     assert entry.data["mac"] == "50:5a:65:71:dd:4b"
-    await hass.services.async_call(
-        "button", "press", {"entity_id": "button.steammachine_sleep"}, blocking=True
-    )
+    await hass.services.async_call("button", "press", {"entity_id": "button.steammachine_sleep"}, blocking=True)
     assert plugin.powered == ["suspend"]
     sent: list[tuple] = []
     monkeypatch.setattr(
         "custom_components.steamos.button.send_magic_packet", lambda mac, ip_address: sent.append((mac, ip_address))
     )
-    await hass.services.async_call(
-        "button", "press", {"entity_id": "button.steammachine_turn_on"}, blocking=True
-    )
+    await hass.services.async_call("button", "press", {"entity_id": "button.steammachine_turn_on"}, blocking=True)
     assert sent == [("50:5a:65:71:dd:4b", "255.255.255.255")]
 
-    # update entity: plugin 0.1.0 installed, release v0.2.0 on GitHub → update available
+    # update entity: the fake GitHub release is one patch ahead of the plugin → update available
     upd = hass.states.get("update.steammachine_plugin")
     assert upd.state == "on"
-    assert upd.attributes["installed_version"] == "0.1.0" and upd.attributes["latest_version"] == "0.2.0"
+    assert upd.attributes["installed_version"] == PLUGIN_VERSION
+    assert upd.attributes["latest_version"] == NEWER_VERSION.lstrip("v")
 
     # refresh action → cache dropped, looked up again
     await hass.services.async_call(DOMAIN, "refresh_artwork", {}, blocking=True)
@@ -257,8 +268,16 @@ async def test_zeroconf_pairing_and_entities(
     # system stats → value sensors; missing metric stays unavailable
     await plugin.server.broadcast(
         plugin.state.set_sys(
-            {"cpu_temp": 61.2, "gpu_temp": 67.0, "cpu_load": 37, "mem_pct": 54, "gpu_load": 92,
-             "gpu_watt": 98.5, "fan_rpm": None, "boot_time": "2026-09-14T18:02:11+02:00"}
+            {
+                "cpu_temp": 61.2,
+                "gpu_temp": 67.0,
+                "cpu_load": 37,
+                "mem_pct": 54,
+                "gpu_load": 92,
+                "gpu_watt": 98.5,
+                "fan_rpm": None,
+                "boot_time": "2026-09-14T18:02:11+02:00",
+            }
         )
     )
     await _wait_for(hass, "sensor.steammachine_cpu_temperature", "61.2")
@@ -305,6 +324,39 @@ async def test_manual_flow_cannot_connect(hass: HomeAssistant) -> None:
     )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_discovery_prefers_ipv4_and_manual_add_takes_over(hass: HomeAssistant, plugin: FakePlugin) -> None:
+    """mDNS listing an IPv6 address first must not win over IPv4, and a stuck discovery
+    flow must not block adding the device by hand ("already_in_progress")."""
+    info = ZeroconfServiceInfo(
+        ip_address=ip_address("fd6a:1586:2a5a:c9c2:9fb8:37a8:44b9:a368"),
+        ip_addresses=[ip_address("fd6a:1586:2a5a:c9c2:9fb8:37a8:44b9:a368"), ip_address(plugin.host)],
+        hostname="steamdeck.local.",
+        name="steamdeck._steamos-ha._tcp.local.",
+        port=plugin.port,
+        properties={"id": "abc123def456", "name": "steamdeck", "model": "Jupiter", "api": "1"},
+        type="_steamos-ha._tcp.local.",
+    )
+    discovered = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=info
+    )
+    assert discovered["type"] is FlowResultType.FORM and discovered["step_id"] == "zeroconf_confirm"
+    assert discovered["description_placeholders"]["host"] == plugin.host  # the IPv4 one
+
+    # Leave the discovery flow open and add the same machine manually.
+    manual = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    manual = await hass.config_entries.flow.async_configure(
+        manual["flow_id"], user_input={CONF_HOST: plugin.host, CONF_PORT: plugin.port}
+    )
+    assert manual["type"] is FlowResultType.FORM and manual["step_id"] == "pair", manual
+    manual = await hass.config_entries.flow.async_configure(manual["flow_id"], user_input={"code": plugin.code})
+    manual = await hass.config_entries.flow.async_configure(manual["flow_id"], user_input={"api_key": ""})
+    assert manual["type"] is FlowResultType.CREATE_ENTRY
+    # Creating the entry aborts the discovery flow with the same unique id.
+    assert all(f["flow_id"] != discovered["flow_id"] for f in hass.config_entries.flow.async_progress())
+    await hass.async_block_till_done()
+    await _wait_for(hass, "sensor.steammachine_status", STATUS_GAMING)  # title = plugin hostname
 
 
 async def test_server_gone_marks_disconnected(hass: HomeAssistant, plugin: FakePlugin, tmp_path) -> None:

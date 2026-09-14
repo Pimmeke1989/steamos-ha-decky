@@ -74,12 +74,17 @@ class SteamOSClient:
     # ------------------------------------------------------------------ helpers
 
     @property
+    def _netloc(self) -> str:
+        host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
+        return f"{host}:{self.port}"
+
+    @property
     def base_url(self) -> str:
-        return f"http://{self.host}:{self.port}"
+        return f"http://{self._netloc}"
 
     @property
     def ws_url(self) -> str:
-        return f"ws://{self.host}:{self.port}/api/ws"
+        return f"ws://{self._netloc}/api/ws"
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
