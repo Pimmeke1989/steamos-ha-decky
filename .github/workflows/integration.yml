@@ -40,5 +40,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install pytest-homeassistant-custom-component
+      - name: Install test framework + the integration's own requirements (from manifest.json)
+        run: |
+          pip install pytest-homeassistant-custom-component
+          pip install $(python -c "import json; print(' '.join(json.load(open('custom_components/steamos/manifest.json'))['requirements']))")
       - run: python -m pytest tests -q
