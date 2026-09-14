@@ -3,6 +3,11 @@ plugin/node_modules/
 plugin/dist/
 plugin/.pnpm-store/
 
+# Vendored plugin deps (created by scripts/vendor-plugin-deps.sh, bundled by CI)
+plugin/py_modules/zeroconf/
+plugin/py_modules/ifaddr/
+plugin/py_modules/*.dist-info/
+
 # Python
 __pycache__/
 *.py[cod]

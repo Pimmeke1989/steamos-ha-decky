@@ -3,7 +3,8 @@
 hwmon devices are found by *name* (``/sys/class/hwmon/hwmon*/name``), the way
 Valve's Inkterface does it, so the code does not depend on hwmon numbering:
 
-    k10temp          CPU temperature (temp1_input, "Tctl")
+    k10temp          CPU temperature (temp1_input, "Tctl"); the Steam Deck APU has no
+                     k10temp and reports the SoC temperature via acpitz instead
     amdgpu           GPU: temp*_input with labels edge/junction/mem, power1_average,
                      and ``device/gpu_busy_percent`` / ``device/mem_busy_percent``
     nvme             SSD temperature
@@ -113,7 +114,7 @@ class SysStats:
     # -------------------------------------------------------------- readers
 
     def cpu_temp(self) -> float | None:
-        for name in ("k10temp", "zenpower", "coretemp"):
+        for name in ("k10temp", "zenpower", "coretemp", "acpitz"):
             value = self._hwmon_value(name, "temp1_input", 0.001)
             if value is not None:
                 return value

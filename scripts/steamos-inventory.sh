@@ -15,12 +15,13 @@ catf /sys/class/dmi/id/sys_vendor
 catf /sys/class/dmi/id/bios_version
 show "kernel" uname -r
 show "user" id
-show "hostname" hostname
+show "hostname" uname -n
 show "uptime" cat /proc/uptime
 show "python3" python3 --version
 show "python3 pad" which python3
 
 section "Steam / SteamOS"
+show "steamos versie" bash -c "grep -E '^(VERSION_ID|BUILD_ID|VARIANT_ID)=' /etc/os-release"
 for d in "$HOME/.steam/steam" "$HOME/.local/share/Steam"; do
   [ -d "$d" ] && echo "Steam dir: $d -> $(readlink -f "$d")"
 done
@@ -98,7 +99,17 @@ show "mangohud versie" bash -c "mangohud --version 2>/dev/null || pacman -Q mang
 show "mangoapp procs" pgrep -a mangoapp
 ls -la "$HOME/.config/MangoHud/" 2>/dev/null
 cat "$HOME/.config/MangoHud/MangoHud.conf" 2>/dev/null | head -n 40
-show "MANGOHUD env" bash -c "printenv | grep -i mango"
+show "MANGOHUD env (deze shell)" bash -c "printenv | grep -i mango"
+for pid in $(pgrep -x mangoapp 2>/dev/null); do
+  echo "-- mangoapp pid $pid environment (MANGOHUD*):"
+  tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep -i mangohud
+  cfg=$(tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep '^MANGOHUD_CONFIGFILE=' | cut -d= -f2-)
+  if [ -n "$cfg" ]; then echo "-- inhoud van $cfg:"; cat "$cfg" 2>/dev/null; ls -la "$cfg" 2>/dev/null; fi
+done
+for pid in $(pgrep -x gamescope 2>/dev/null | head -n 1); do
+  echo "-- gamescope pid $pid environment (MANGOHUD*):"
+  tr '\0' '\n' < /proc/$pid/environ 2>/dev/null | grep -i mangohud
+done
 show "sysv msg queues" ipcs -q
 ls -la /tmp/mangoapp* /tmp/MangoHud* 2>/dev/null
 

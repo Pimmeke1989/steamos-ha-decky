@@ -79,6 +79,30 @@ def test_gpu_temp_fallback_without_labels(tmp_path):
     assert stats.gpu_mem_temp() == 70.0
 
 
+def test_steam_deck_like_tree(tmp_path):
+    """Jupiter: no k10temp (acpitz instead), amdgpu with only 'edge', no mem_busy_percent."""
+    sysr = str(tmp_path / "sys")
+    procr = str(tmp_path / "proc")
+    _w(sysr, "class/hwmon/hwmon1/name", "acpitz\n")
+    _w(sysr, "class/hwmon/hwmon1/temp1_input", "37000\n")
+    _w(sysr, "class/hwmon/hwmon3/name", "steamdeck_hwmon\n")
+    _w(sysr, "class/hwmon/hwmon3/fan1_input", "1527\n")
+    _w(sysr, "class/hwmon/hwmon5/name", "amdgpu\n")
+    _w(sysr, "class/hwmon/hwmon5/temp1_input", "37000\n")
+    _w(sysr, "class/hwmon/hwmon5/temp1_label", "edge\n")
+    _w(sysr, "class/hwmon/hwmon5/power1_average", "3014000\n")
+    _w(sysr, "class/hwmon/hwmon5/device/gpu_busy_percent", "0\n")
+    _w(sysr, "class/hwmon/hwmon5/device/mem_info_vram_total", "1073741824\n")
+    _w(sysr, "class/hwmon/hwmon5/device/mem_info_vram_used", "374636544\n")
+    stats = SysStats(sysr, procr)
+    s = stats.sample()
+    assert s["cpu_temp"] == 37.0
+    assert s["gpu_temp"] == 37.0 and s["gpu_mem_temp"] is None
+    assert s["gpu_watt"] == 3.0
+    assert s["fan_rpm"] == 1527
+    assert s["vram_pct"] == 35  # from mem_info_vram_* fallback
+
+
 def test_apply_thresholds():
     prev = {"cpu_temp": 61.2, "gpu_load": 92, "fan_rpm": 2310, "boot_time": "x"}
     cur = {"cpu_temp": 61.5, "gpu_load": 93, "fan_rpm": 2340, "boot_time": "x"}

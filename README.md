@@ -183,6 +183,9 @@ zip built by CI. The plugin logs to `~/homebrew/logs/SteamOS HA/`.
    generated release notes. HACS picks up the new version from the tag; the `update`
    entity in Home Assistant shows it.
 
+Local plugin testing needs the vendored deps once: `bash scripts/vendor-plugin-deps.sh`
+(installs zeroconf + ifaddr into `plugin/py_modules`, git-ignored; CI does the same for the zip).
+
 `scripts/steamos-inventory.sh` prints everything the plugin relies on (hwmon names,
 Decky user, steamos-manager D-Bus, MangoHud paths) — useful when something doesn't show up.
 
@@ -191,4 +194,6 @@ overall design in [`docs/design.md`](docs/design.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The release zip bundles [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf)
+(LGPL-2.1) and [ifaddr](https://github.com/ifaddr/ifaddr) (MIT) unmodified, as pure-Python
+packages under `py_modules/`, because Decky's runtime has no zeroconf and avahi is off on SteamOS.

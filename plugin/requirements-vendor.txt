@@ -1,0 +1,4 @@
+# Pure-Python packages bundled into py_modules/ of the release zip (see scripts/vendor-plugin-deps.sh).
+# Decky Loader's runtime has aiohttp but no zeroconf; avahi-daemon is off on SteamOS.
+zeroconf
+ifaddr

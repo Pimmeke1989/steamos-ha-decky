@@ -37,15 +37,19 @@ lives as a shared page; this file keeps the decisions that shape the code.
 - FPS uses MangoHud's control queue (send-only) plus its CSV log rather than the frame queue; the config file is patched in place because Steam owns it.
 - An `update` entity (GitHub releases) was added; installing stays manual through Decky.
 
-## To verify on the device (M0)
+## Verified on a Steam Deck (SteamOS 3.8.16, Decky Loader 3.2.6) — 2026-09-14
 
-| Question | Assumption | Fallback in code |
+| Question | Result on the Deck | Consequence |
 |---|---|---|
-| Decky Loader runs on the Steam Machine; user | yes, `deck` | paths via Decky's own constants |
-| hwmon names | `k10temp`, `amdgpu`, `nvme`, `steamdeck_hwmon` | lookup by name; missing metric → no entity |
-| Which `temp*` is junction/edge | temp2 = junction (Inkterface) | read `temp*_label` |
-| MangoHud config file mangoapp reads, log dir, `mangohudctl` present | unknown | settings in plugin UI; FPS unavailable until it works |
-| `RegisterForAppLifetimeNotifications` / `GetAppOverviewByAppID` still work | yes | `console_log.txt` tailer as reserve |
-| `python-zeroconf` importable in Decky's Python | no | `avahi-publish-service` subprocess, else manual add |
-| Port 8570 free and reachable | yes | configurable |
-| `aiohttp` importable in the plugin backend | yes (Decky Loader ships it) | vendor into `py_modules/` |
+| Decky Loader, user | runs as a service; user `deck`, home `/home/deck` | as assumed |
+| hwmon names | `steamdeck_hwmon` (fan1), `nvme` (temp1), `amdgpu` (temp1 = `edge`, `power1_average`, `gpu_busy_percent`); **no `k10temp`**, CPU/SoC temp via `acpitz`; `mem_busy_percent` unreadable | `acpitz` added as CPU-temp fallback; VRAM via `mem_info_vram_*` fallback works |
+| MangoHud | `mangohud`, `mangoapp`, `mangohudctl` present (0.8.3); in Gaming Mode `mangoapp` runs with `MANGOHUD_CONFIGFILE=/run/user/1000/gamescope.*/mangohud.config` (owned by deck, contains `control=mangohud`, `preset=N`); SysV queue key `0xffffffff` exists and is drained by mangoapp | exactly the flow `mangohud.py` implements |
+| Session detection | Gaming Mode: `loginctl` session `Desktop=gamescope`, `Type=wayland`; Desktop Mode: `Desktop=KDE` | heartbeat stays the primary signal; this is a possible backend cross-check |
+| mDNS | `python-zeroconf` missing, `avahi-daemon` disabled | zeroconf + ifaddr vendored (pure Python) into the release zip |
+| Python / aiohttp | system Python 3.13.5 with aiohttp 3.12; Decky's own runtime decides for the backend | vendored packages are pure Python so they load on any 3.11+ |
+| steamos-manager | D-Bus `com.steampowered.SteamOSManager1` answers (TdpLimit, HdmiCecState, DeviceModel); `dbus`/`dbus_next`/`gi` importable | ready for the "later" control features |
+| Port 8570 | free | — |
+| Root filesystem | `steamos-readonly enabled` | nothing is written outside `/home` and `/run/user` |
+| `hostname` command | absent on SteamOS | script uses `uname -n`; plugin uses `socket.gethostname()` |
+
+Still open for the Steam Machine itself: its hwmon names (a desktop-class CPU should have `k10temp`; the GPU may expose `junction`/`mem`), and whether the fan sits under `steamdeck_hwmon` or another driver.
