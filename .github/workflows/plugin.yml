@@ -1,0 +1,75 @@
+name: Decky plugin
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+    paths: ["plugin/**", "pyproject.toml", ".github/workflows/plugin.yml"]
+  pull_request:
+    paths: ["plugin/**", "pyproject.toml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to attach the zip to a release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Backend lint + tests
+        run: |
+          pip install aiohttp pytest pytest-asyncio ruff
+          ruff check plugin
+          python -m pytest plugin/tests -q
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: plugin/pnpm-lock.yaml
+      - name: Frontend build
+        working-directory: plugin
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
+
+      - name: Version consistency
+        run: |
+          PKG=$(python -c "import json;print(json.load(open('plugin/package.json'))['version'])")
+          MAN=$(python -c "import json;print(json.load(open('custom_components/steamos/manifest.json'))['version'])")
+          PY=$(python -c "import re;print(re.search(r'PLUGIN_VERSION = \"([^\"]+)\"', open('plugin/py_modules/steamos_ha/__init__.py').read()).group(1))")
+          echo "package.json=$PKG manifest.json=$MAN __init__.py=$PY"
+          test "$PKG" = "$MAN" -a "$PKG" = "$PY" || { echo "::error::versions differ; run scripts/set-version.py"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test "v$PKG" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME != version $PKG"; exit 1; }
+          fi
+
+      - name: Package for Decky ("Install from zip")
+        run: |
+          VERSION=$(python -c "import json;print(json.load(open('plugin/package.json'))['version'])")
+          rm -rf release && mkdir -p "release/SteamOS HA"
+          cp -r plugin/dist plugin/main.py plugin/plugin.json plugin/package.json plugin/py_modules "release/SteamOS HA/"
+          cp README.md LICENSE "release/SteamOS HA/"
+          find release -name "__pycache__" -type d -exec rm -rf {} +
+          rm -f "release/SteamOS HA/dist/index.js.map"
+          (cd release && zip -r "SteamOS-HA-v${VERSION}.zip" "SteamOS HA")
+          ls -la release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SteamOS-HA-plugin
+          path: release/*.zip
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
