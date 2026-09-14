@@ -1,103 +1,151 @@
-# steamos-ha-decky
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="custom_components/steamos/brand/logo@2x.png" alt="SteamOS for Home Assistant" width="480">
+  </picture>
+</p>
 
-Connects a Steam Machine (or any SteamOS device running [Decky Loader](https://decky.xyz)) to Home Assistant.
+<p align="center">
+  <a href="https://github.com/Pimmeke1989/steamos-ha-decky/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Pimmeke1989/steamos-ha-decky?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/Pimmeke1989/steamos-ha-decky/actions/workflows/plugin.yml"><img alt="Decky plugin CI" src="https://github.com/Pimmeke1989/steamos-ha-decky/actions/workflows/plugin.yml/badge.svg"></a>
+  <a href="https://github.com/Pimmeke1989/steamos-ha-decky/actions/workflows/integration.yml"><img alt="Home Assistant integration CI" src="https://github.com/Pimmeke1989/steamos-ha-decky/actions/workflows/integration.yml/badge.svg"></a>
+  <a href="https://hacs.xyz"><img alt="HACS custom repository" src="https://img.shields.io/badge/HACS-custom%20repository-41BDF5"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Pimmeke1989/steamos-ha-decky"></a>
+</p>
 
-Two parts, one repo:
+<h1 align="center">SteamOS for Home Assistant</h1>
 
-| Part | Where | What it does |
-|---|---|---|
-| **Decky plugin** "SteamOS HA" | `plugin/` | Runs a small local API on the Steam Machine, reports status / running game / stats, shows Home Assistant notifications as toasts in Gaming Mode. |
-| **Home Assistant integration** `steamos` | `custom_components/steamos/` | Finds the plugin via mDNS, pairs with a code shown on screen, keeps a WebSocket open and exposes everything as one device. |
+<p align="center">
+  Your Steam Machine (or Steam Deck) as a device in Home Assistant: see what's being played,
+  watch temperatures and FPS, get notifications on the TV, and switch the machine on or off.
+</p>
 
-No MQTT broker, no cloud, and the Steam Machine never holds Home Assistant credentials.
+---
 
-> **Status: 0.1.0, feature-complete for the first release** — discovery, pairing, status,
-> running game, system statistics, FPS via gamescope, on-screen notifications, optional
-> artwork via SteamGridDB and a plugin update check. Tested end-to-end on a Steam Deck;
-> `docs/design.md` lists what is still open for the Steam Machine itself.
+## What it does
 
-## How it works
+Once installed, your Steam Machine shows up in Home Assistant as one device with a set of
+sensors and buttons. In plain terms, it lets you:
 
-```
-Steam Machine (Gaming Mode)                     Home Assistant
-┌──────────────────────────────┐                ┌─────────────────────────┐
-│ Decky frontend (Steam UI)    │                │ steamos integration     │
-│  · heartbeat every 5 s       │                │  · zeroconf discovery   │
-│  · running game via          │   mDNS + WS    │  · config flow + pairing│
-│    SteamClient API           │ ◄────────────► │  · push coordinator     │
-│  · toasts                    │  :8570 /api/ws │  · sensor.*_status      │
-├──────────────────────────────┤                │  · notify.*             │
-│ Decky backend (Python)       │                └─────────────────────────┘
-│  · aiohttp HTTP + WebSocket  │
-│  · mDNS _steamos-ha._tcp     │
-│  · hwmon / proc / gamescope  │
-└──────────────────────────────┘
-```
+- **See if the machine is in use.** A status sensor says whether it is in Gaming Mode or not,
+  and a game sensor shows the title of whatever is running right now (also for non-Steam
+  games you added as shortcuts).
+- **Keep an eye on the hardware.** CPU and GPU temperature, CPU/GPU/memory/VRAM usage,
+  GPU power draw, fan speed, SSD temperature, and the FPS and frame time of the game that is
+  running.
+- **Put messages on the TV.** Send a notification from any automation and it pops up as a
+  toast in the Steam UI — "the laundry is done", "someone is at the door", "dinner in
+  10 minutes".
+- **Control power.** Buttons for *Sleep*, *Shut down*, *Restart* and *Turn on*
+  (Wake-on-LAN). No extra YAML needed.
+- **Show the game's artwork.** Optionally, with a free SteamGridDB key, the cover and icon
+  of the running game become image entities for your dashboard.
+- **React to events.** A `game_started` / `game_stopped` event and an on/off "game running"
+  sensor make automations easy: dim the lights when a game starts, bring them back when it
+  stops.
 
-Only Gaming Mode counts. When the Steam Machine is in Desktop Mode, asleep or off, the
-integration shows **Disconnected** and every other entity becomes unavailable.
+Everything stays on your own network. There is no cloud service, no MQTT broker, and the
+Steam Machine never stores a Home Assistant password or token — pairing works the other way
+round, with a code shown on screen.
 
-## Install
+## How it works, in one paragraph
 
-### 1. Decky plugin (on the Steam Machine)
+Two small pieces of software talk to each other. On the Steam Machine runs a
+[Decky Loader](https://decky.xyz) plugin called **SteamOS HA**; it reads the hardware
+sensors, watches which game is running, and offers all of that on a tiny local API. In
+Home Assistant runs the **SteamOS** integration; it finds the plugin automatically on the
+network, pairs with it once, and from then on gets every change pushed instantly. Only
+Gaming Mode counts: when the machine is in Desktop Mode, asleep or switched off, Home
+Assistant shows it as *Disconnected* and the other sensors become unavailable (the *Turn on*
+button keeps working, of course).
 
-1. Install [Decky Loader](https://decky.xyz) if you haven't.
-2. Download `SteamOS-HA-<version>.zip` from the [releases page](https://github.com/Pimmeke1989/steamos-ha-decky/releases).
-3. In Gaming Mode open the Quick Access Menu → Decky → ⚙ → *Developer* → *Install plugin from zip*
-   (enable developer mode once under Decky settings if the option is missing).
-4. The plugin shows up as **Home Assistant** in the Quick Access Menu.
+## Installation
 
-### 2. Home Assistant integration
+You need three things: the plugin on the Steam Machine, the integration in Home Assistant,
+and a one-time pairing. Ten minutes, tops.
 
-Via HACS: add `https://github.com/Pimmeke1989/steamos-ha-decky` as a custom repository
-(category *Integration*), install **SteamOS**, restart Home Assistant.
+### Step 1 — the plugin on the Steam Machine
 
-Manual: copy `custom_components/steamos` into your `config/custom_components/` and restart.
+1. Install [Decky Loader](https://decky.xyz) if you haven't already (it is the plugin
+   system for Gaming Mode; installation is a one-time thing in Desktop Mode).
+2. Download `SteamOS-HA-v<version>.zip` from the
+   [latest release](https://github.com/Pimmeke1989/steamos-ha-decky/releases/latest).
+   You can do this on the Steam Machine itself in Desktop Mode, or on any computer and copy
+   the file over.
+3. In Gaming Mode, open the Quick Access Menu (the ··· button), go to the Decky tab (the
+   plug icon), press the ⚙ gear, and choose **Developer → Install plugin from zip**. If you
+   don't see a *Developer* entry, enable *Developer mode* in Decky's settings first.
+4. Pick the zip. The plugin appears in the Decky tab as **Home Assistant**. Open it once: it
+   shows the address it is listening on and whether discovery is working.
 
-### 3. Pair
+### Step 2 — the integration in Home Assistant
 
-1. Put the Steam Machine in Gaming Mode.
-2. Home Assistant should discover it ("Steam Machine found" under *Settings → Devices & services*).
-   If not, add the **SteamOS** integration manually with the hostname or IP and port `8570`.
-3. Confirm; a 6-digit code appears on the TV and in the plugin's panel. Type it in Home Assistant.
-4. Optionally enter a [SteamGridDB API key](https://www.steamgriddb.com/profile/preferences/api)
-   for artwork entities. Leave it empty to skip; you can add or remove it later under
-   *Configure* on the integration.
+Via **HACS** (recommended, so you get updates):
 
-That's it. Re-pairing later: remove the integration entry, or press *Koppeling verwijderen* in the plugin.
+1. HACS → three-dot menu → **Custom repositories**.
+2. Add `https://github.com/Pimmeke1989/steamos-ha-decky`, category *Integration*.
+3. Search for **SteamOS**, install it, and restart Home Assistant.
 
-## Entities
+Manually: copy the folder `custom_components/steamos` from this repository into the
+`custom_components` folder of your Home Assistant configuration and restart.
 
-All entities hang off one device. Everything except the status sensor and the notify
-entity becomes `unavailable` while the Steam Machine is not in Gaming Mode.
+### Step 3 — pairing
 
-| Entity | Description |
+1. Make sure the Steam Machine is in Gaming Mode.
+2. Home Assistant should find it on its own: under *Settings → Devices & services* a card
+   says "Steam Machine found" (or whatever the machine is called). Press **Add**. If nothing
+   shows up, press *Add integration*, search for *SteamOS* and enter the machine's IP
+   address; the port is `8570`.
+3. A 6-digit code appears on the TV (and in the plugin panel). Type it into Home Assistant.
+4. Optionally paste a [SteamGridDB API key](https://www.steamgriddb.com/profile/preferences/api)
+   for game artwork. Leave it empty to skip; you can add or remove it any time later under
+   *Configure*.
+
+Done. The device and all its entities are there right away.
+
+Need to pair again later (new Home Assistant, reset, or just curious)? Remove the
+integration entry in Home Assistant, or press **Remove pairing** in the plugin panel, and
+run Step 3 again.
+
+### Updating
+
+New versions of the integration arrive through HACS like any other. For the plugin, the
+`update` entity in Home Assistant tells you when a newer release exists; install the new zip
+the same way as in Step 1 (installing over the old one is fine, the pairing is kept).
+
+## What you get in Home Assistant
+
+All entities belong to one device. Entities marked with * are disabled by default — enable
+them in the entity settings if you want them. Everything except *Status*, the notification
+entity and *Turn on* becomes `unavailable` while the machine is not in Gaming Mode.
+
+| Entity | What it tells you |
 |---|---|
-| `sensor.<name>_status` | `gaming` or `disconnected`; always available |
-| `sensor.<name>_game` | Title of the running game, or `none`; attributes `appid`, `shortcut`, `started_at` |
+| `sensor.<name>_status` | `gaming` or `disconnected` |
+| `sensor.<name>_game` | Title of the running game, or `none`. Attributes: `appid`, `shortcut`, `started_at` |
 | `binary_sensor.<name>_game_running` | On while a game runs |
-| `event.<name>_game` | `game_started` / `game_stopped` with `title`, `appid`, `shortcut` |
-| `sensor.<name>_cpu_temperature`, `_gpu_temperature`, `_gpu_memory_temperature`*, `_ssd_temperature`* | °C from hwmon (`k10temp`, `amdgpu`, `nvme`) |
+| `event.<name>_game` | `game_started` / `game_stopped`, with the title in the event data |
+| `sensor.<name>_cpu_temperature`, `_gpu_temperature`, `_gpu_memory_temperature`*, `_ssd_temperature`* | °C |
 | `sensor.<name>_cpu_usage`, `_memory_usage`, `_gpu_usage`, `_vram_usage` | % |
 | `sensor.<name>_cpu_frequency`* | GHz, average of all cores |
 | `sensor.<name>_gpu_power` | W |
 | `sensor.<name>_fan_speed` | rpm |
-| `sensor.<name>_last_boot`* | timestamp (diagnostic) |
-| `sensor.<name>_fps`, `_frametime`* | from gamescope's stats pipe, averaged over the last second; only while a game runs |
-| `notify.<name>_on_screen_notification` | `notify.send_message` shows a toast; fails with a clear error outside Gaming Mode |
-| `button.<name>_sleep`, `_shut_down`, `_restart`* | suspend / power off / reboot through the Steam UI (`SteamClient.System`); only in Gaming Mode |
-| `button.<name>_turn_on` | sends a Wake-on-LAN magic packet to the MAC learned at pairing; always available once a MAC is known |
-| `image.<name>_cover`, `_icon` | artwork of the running game via SteamGridDB (only with an API key) |
-| `sensor.<name>_artwork_match` | which SteamGridDB game was matched (diagnostic); attributes `sgdb_id`, `overridden`, `error` |
-| `update.<name>_plugin` | compares the running plugin version with the latest GitHub release (diagnostic; install is manual) |
+| `sensor.<name>_fps`, `_frametime`* | Frames per second and milliseconds per frame of the running game, averaged over the last second |
+| `sensor.<name>_last_boot`* | When the machine last started |
+| `notify.<name>_on_screen_notification` | Send a message here and it pops up on the TV |
+| `button.<name>_sleep`, `_shut_down`, `_restart`* | Same as picking those from the Steam power menu |
+| `button.<name>_turn_on` | Sends a Wake-on-LAN packet |
+| `image.<name>_cover`, `_icon` | Artwork of the running game (only with a SteamGridDB key) |
+| `sensor.<name>_artwork_match` | Which SteamGridDB entry was used (diagnostic) |
+| `update.<name>_plugin` | Tells you when a newer plugin release exists |
 
-\* disabled by default; enable in the entity settings.
+A metric your machine doesn't expose simply stays unavailable. Sensor values are only sent
+when they actually change by a meaningful amount, so your database doesn't fill up with
+noise.
 
-A metric the machine does not expose (no matching hwmon node) simply stays unavailable.
-The plugin samples every 2 s and only sends values that moved by more than a small
-threshold (0.5 °C, 1 %, 0.5 W, 50 rpm), so the recorder stays quiet.
+## Things you can do with it
 
-Example automation:
+**A message on the TV when the washing machine is done:**
 
 ```yaml
 alias: Washing machine done → toast on TV
@@ -115,11 +163,9 @@ actions:
     data: { title: Washing machine, message: The laundry is done }
 ```
 
-## Actions
-
-`notify.send_message` on the notify entity is the simple form. `steamos.notify` adds a
-duration (1–60 s) and an icon (`home`, `bell`, `info`, `alert`, `check`, `door`, `phone`,
-`message`, `washer`, `car`, `clock`, `sun`):
+**The same, but with a longer display time and an icon.** The `steamos.notify` action adds
+a duration (1–60 s) and an icon: `home`, `bell`, `info`, `alert`, `check`, `door`, `phone`,
+`message`, `washer`, `car`, `clock` or `sun`.
 
 ```yaml
 action: steamos.notify
@@ -127,86 +173,101 @@ target: { entity_id: notify.steam_machine_on_screen_notification }
 data: { title: Doorbell, message: Someone is at the door, duration: 10, icon: door }
 ```
 
-`steamos.refresh_artwork` forgets the cached SteamGridDB result for the current game and
-looks it up again.
+**Dim the lights when a game starts, restore them when it stops:**
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.steam_machine_game_running
+actions:
+  - if:
+      - condition: state
+        entity_id: binary_sensor.steam_machine_game_running
+        state: "on"
+    then:
+      - action: light.turn_on
+        target: { entity_id: light.living_room }
+        data: { brightness_pct: 20 }
+    else:
+      - action: scene.turn_on
+        target: { entity_id: scene.living_room_evening }
+```
+
+**Put the machine to sleep when everyone leaves the house:** a `button.press` on
+`button.steam_machine_sleep` in your "away" automation. And **wake it before a gaming
+evening** with `button.steam_machine_turn_on`.
 
 ## Power buttons and Wake-on-LAN
 
-*Sleep*, *Shut down* and *Restart* ask the plugin's frontend to call the same functions
-the Steam UI's power menu uses, so they behave exactly like picking those from the menu.
-They are unavailable outside Gaming Mode (there is no frontend to ask).
+*Sleep*, *Shut down* and *Restart* do exactly what the same options in the Steam power
+menu do. They only work while the machine is in Gaming Mode, since that is where the Steam
+UI lives.
 
-*Turn on* is built into the integration: the plugin reports its MAC address at pairing
-(and on every reconnect), and the button sends a Wake-on-LAN magic packet — no separate
-`wake_on_lan` YAML needed. Two caveats:
+*Turn on* works differently: Home Assistant sends a Wake-on-LAN "magic packet" to the
+machine's network card. The plugin tells the integration its MAC address during pairing, so
+there is nothing to configure. Two things to know:
 
-- Wake-on-LAN needs a wired connection in practice. A Steam Machine on Ethernet wakes
-  from sleep and (with WoL enabled in the firmware) from power-off; a Steam Deck on Wi-Fi
-  generally does not.
-- The packet is broadcast to `255.255.255.255`. If Home Assistant sits on another subnet
-  or in a Docker network, set the subnet broadcast (e.g. `192.168.1.255`) under
-  *Configure*.
+- **Wake-on-LAN needs a cable.** A Steam Machine on Ethernet wakes from sleep, and from
+  fully off as well if Wake-on-LAN is enabled in its firmware settings. Over Wi-Fi it
+  generally does not work; that is a limitation of Wi-Fi hardware, not of this integration.
+- If Home Assistant runs on a different network segment (a VLAN, a Docker network), set the
+  broadcast address of the Steam Machine's network (for example `192.168.1.255`) under
+  *Configure* on the integration.
 
 ## Game artwork (optional)
 
-With a SteamGridDB API key the integration looks the running game up **by title** — not by
-appid, because non-Steam shortcuts get random ids — and exposes the best-scored cover
-(600×900) and icon as `image` entities. Results are cached for 30 days, so a game costs
-at most three API calls. When no game runs the last artwork
-stays put and `sensor.<name>_artwork_match` shows `none`, so a dashboard can decide for
-itself whether to keep showing the cover. Titles that match the wrong game can be pinned
-under *Configure* with one `Game title = SteamGridDB game id` per line.
+With a free [SteamGridDB](https://www.steamgriddb.com) API key, the integration looks up the
+running game **by its title** and exposes the highest-rated cover (600×900) and icon as
+image entities. It searches by title rather than by Steam's app id on purpose: games you
+added as non-Steam shortcuts get a random id that means nothing to anyone.
 
-## FPS via gamescope
+Results are cached for 30 days, so a game costs a handful of requests once and nothing after
+that. When no game runs, the last artwork stays in place and `sensor.<name>_artwork_match`
+shows `none`, so your dashboard can decide for itself whether to keep showing the cover.
 
-gamescope (the Gaming Mode compositor) is started with `-T …/stats.pipe` and writes
-`fps=59.988003` a few times per second plus `focus=<appid>` / `focus=steam` into that FIFO.
-Nothing on SteamOS reads it anymore, so the plugin opens it while a game runs and averages
-the samples over the last second. No config files are touched and MangoHud is not involved
-(its log reports mangoapp's own redraw rate, not the game's — verified on a Steam Deck).
-The pipe is found from the running gamescope's command line; `fps.stats_pipe` in
-`~/homebrew/settings/SteamOS HA/settings.json` overrides it. If the pipe cannot be found
-the FPS line in the plugin panel says so and the sensors stay unavailable.
+If a title matches the wrong game, pin it under *Configure* with one line per game:
+`Game title = SteamGridDB game id`. The `steamos.refresh_artwork` action throws away the
+cached result for the current game and looks it up again.
 
-## Development
+## Frequently asked questions
 
-```bash
-# Decky plugin frontend
-cd plugin && pnpm install && pnpm build        # → plugin/dist/index.js
+**Home Assistant doesn't find the Steam Machine.**
+Check that it is in Gaming Mode and that the *mDNS* line in the plugin panel says
+`zeroconf` (not *unavailable*). Some
+routers block mDNS between Wi-Fi and wired devices or between VLANs; in that case add the
+integration manually with the IP address (port `8570`). It works just as well, you only
+lose the automatic discovery.
 
-# Backend tests (no Steam Machine needed; decky is stubbed)
-pip install aiohttp pytest pytest-asyncio ruff
-python -m pytest -q && ruff check .
-```
+**The status says Disconnected but the machine is on.**
+Then it is not in Gaming Mode. That is by design: the plugin's front-end only exists inside
+the Steam UI, so Desktop Mode counts as "not available for gaming".
 
-Deploy to a Steam Machine for testing: copy the `plugin/` folder (with `dist/`) to
-`~/homebrew/plugins/SteamOS HA/` and reload plugins from Decky's settings, or use the
-zip built by CI. The plugin logs to `~/homebrew/logs/SteamOS HA/`.
+**A temperature or fan sensor is missing.**
+Not every device exposes every sensor. The plugin reads whatever the hardware offers; a
+sensor that isn't there stays unavailable rather than showing a wrong number.
 
-### Releasing
+**FPS shows nothing while a game is running.**
+Open the plugin panel: the *FPS* line says whether it could find gamescope's stats pipe.
+FPS is only reported while a game is in the foreground.
 
-1. `python scripts/set-version.py 0.2.0` — writes the version into `plugin/package.json`,
-   `custom_components/steamos/manifest.json` and `steamos_ha/__init__.py`.
-2. Commit, then create the tag `v0.2.0` (GitHub Desktop: *Repository → Create tag*, or
-   `git tag v0.2.0`) and push it. Alternatively create the release with that tag in the
-   GitHub UI — that pushes the tag too.
-3. The *Decky plugin* workflow runs tests, builds the frontend, checks that tag and
-   versions agree, and attaches `SteamOS-HA-v0.2.0.zip` to the GitHub release with
-   generated release notes. HACS picks up the new version from the tag; the `update`
-   entity in Home Assistant shows it.
+**Can I use this with a Steam Deck?**
+Yes. Everything except Wake-on-LAN (the Deck is on Wi-Fi) works the same, and the Deck is
+where most of the testing happened.
 
-Local plugin testing needs the vendored deps once: `bash scripts/vendor-plugin-deps.sh`
-(installs zeroconf + ifaddr into `plugin/py_modules`, git-ignored; CI does the same for the zip).
+**Is anything sent to the internet?**
+Only the optional SteamGridDB artwork lookups (with your own key) and the check for a newer
+plugin release on GitHub. Everything else is local.
 
-`scripts/steamos-inventory.sh` prints everything the plugin relies on (hwmon names,
-Decky user, steamos-manager D-Bus, gamescope/MangoHud processes) and `scripts/fps-probe.py`
-checks the possible FPS sources — useful when something doesn't show up.
+## For developers
 
-The API between plugin and integration is documented in [`docs/api.md`](docs/api.md); the
-overall design in [`docs/design.md`](docs/design.md).
+Building, testing, releasing and the design behind the two halves are described in
+[`docs/development.md`](docs/development.md). The API between the plugin and the
+integration is in [`docs/api.md`](docs/api.md), and the design decisions and on-device
+findings in [`docs/design.md`](docs/design.md). Issues and pull requests are welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The release zip bundles [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf)
-(LGPL-2.1) and [ifaddr](https://github.com/ifaddr/ifaddr) (MIT) unmodified, as pure-Python
-packages under `py_modules/`, because Decky's runtime has no zeroconf and avahi is off on SteamOS.
+MIT — see [LICENSE](LICENSE). The release zip bundles
+[python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) (LGPL-2.1) and
+[ifaddr](https://github.com/ifaddr/ifaddr) (MIT) unmodified as pure-Python packages under
+`py_modules/`, because Decky's runtime has no zeroconf and avahi is switched off on SteamOS.
